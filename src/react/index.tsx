@@ -8,6 +8,7 @@ import type {
     PageSetup,
     PlaceholderDefinition,
     SkeletonPreview,
+    ZoneName,
 } from '../core/types';
 
 export interface DocumentBuilderProps {
@@ -24,6 +25,8 @@ export interface DocumentBuilderProps {
     placeholders?: PlaceholderDefinition[] | Record<string, string>;
     /** Context drawn behind the free zone: address window, subject, footer. */
     skeletonPreview?: SkeletonPreview;
+    /** Vorbelegung leerer Zonen beim ersten Öffnen — vor allem die Fußzeile. */
+    defaults?: Partial<Record<ZoneName, string>>;
     onUploadImage?: (file: File) => Promise<string>;
     onReady?: (instance: DocumentBuilderInstance) => void;
     theme?: 'light' | 'dark';
@@ -51,6 +54,7 @@ export const DocumentBuilder = forwardRef<DocumentBuilderHandle, DocumentBuilder
             availableColumns,
             placeholders,
             skeletonPreview,
+            defaults,
             onUploadImage,
             onReady,
             theme = 'light',
@@ -62,8 +66,8 @@ export const DocumentBuilder = forwardRef<DocumentBuilderHandle, DocumentBuilder
     ) {
         const containerRef = useRef<HTMLDivElement | null>(null);
         const instanceRef = useRef<DocumentBuilderInstance | null>(null);
-        /** Last HTML the editor produced — guards the value-prop sync below. */
-        const lastEmittedRef = useRef<string | undefined>(value?.html);
+        /** Zuletzt vom Editor erzeugter Rumpf — sichert den Abgleich unten ab. */
+        const lastEmittedRef = useRef<string | undefined>(value?.body);
 
         // Callbacks live in refs so a re-render never tears down the editor.
         const onChangeRef = useRef(onChange);
@@ -85,6 +89,7 @@ export const DocumentBuilder = forwardRef<DocumentBuilderHandle, DocumentBuilder
                 availableColumns,
                 placeholders,
                 skeletonPreview,
+                defaults,
                 theme,
                 locale,
                 onUploadImage: (file) => {
@@ -95,7 +100,7 @@ export const DocumentBuilder = forwardRef<DocumentBuilderHandle, DocumentBuilder
                         : Promise.reject(new Error('Kein Upload-Handler konfiguriert.'));
                 },
                 onChange: (design) => {
-                    lastEmittedRef.current = design.html;
+                    lastEmittedRef.current = design.body;
                     onChangeRef.current?.(design);
                 },
                 onReady: (ready) => onReadyRef.current?.(ready),
@@ -114,11 +119,11 @@ export const DocumentBuilder = forwardRef<DocumentBuilderHandle, DocumentBuilder
 
         // Reload only when the design changed outside of this editor.
         useEffect(() => {
-            if (value === undefined || value?.html === lastEmittedRef.current) {
+            if (value === undefined || value?.body === lastEmittedRef.current) {
                 return;
             }
 
-            lastEmittedRef.current = value?.html;
+            lastEmittedRef.current = value?.body;
             instanceRef.current?.loadDesign(value);
         }, [value]);
 
@@ -158,6 +163,7 @@ export type {
     PageSetup,
     PlaceholderDefinition,
     SkeletonPreview,
+    ZoneName,
 } from '../core/types';
 export { DEFAULT_COLUMNS, DIN_5008 } from '../core/defaults';
 export { tokenFor } from '../core/variables';

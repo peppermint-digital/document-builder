@@ -14,4 +14,5 @@ export type {
     PageSetup,
     PlaceholderDefinition,
     SkeletonPreview,
+    ZoneName,
 } from './types';
