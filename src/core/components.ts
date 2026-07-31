@@ -35,6 +35,101 @@ function traitNameFor(column: LineItemColumn): string {
 }
 
 /**
+ * Sample content is inert: it cannot be edited, dragged or deleted.
+ *
+ * Without this a user could take the preview apart cell by cell and believe
+ * they were editing the table — the table is built at print time, and nothing
+ * they did here would survive.
+ *
+ * Note what is deliberately *not* set: `selectable`. Making the cells
+ * unselectable means a click on the table selects nothing at all, and the only
+ * way to reach its settings would be the layer tree. Clicks are allowed and
+ * redirected to the table itself — see `redirectSelectionToOwner()`.
+ */
+const INERT = {
+    editable: false,
+    draggable: false,
+    droppable: false,
+    removable: false,
+    copyable: false,
+    layerable: false,
+} as const;
+
+function text(content: string): Record<string, unknown> {
+    return { type: 'textnode', content };
+}
+
+/**
+ * Builds the preview as a component tree rather than an HTML string.
+ *
+ * GrapesJS parses component HTML through a detached element, and a browser
+ * drops `<tr>`/`<td>` that are not inside a real `<table>` — passing markup
+ * here collapses every row into a single line of text. Definition objects skip
+ * the parser entirely.
+ */
+function tableTree(
+    columns: LineItemColumn[],
+    rows: Array<Record<string, string>>,
+): Array<Record<string, unknown>> {
+    const cell = (
+        tagName: 'th' | 'td',
+        column: LineItemColumn,
+        content: Array<Record<string, unknown>>,
+    ): Record<string, unknown> => ({
+        tagName,
+        attributes: { class: `db-align-${column.align ?? 'left'}` },
+        components: content,
+        ...INERT,
+    });
+
+    return [
+        {
+            tagName: 'colgroup',
+            components: columns.map((column) => ({
+                tagName: 'col',
+                attributes: { style: `width: ${column.width}` },
+                ...INERT,
+            })),
+            ...INERT,
+        },
+        {
+            tagName: 'thead',
+            components: [
+                {
+                    tagName: 'tr',
+                    components: columns.map((column) => cell('th', column, [text(column.label)])),
+                    ...INERT,
+                },
+            ],
+            ...INERT,
+        },
+        {
+            tagName: 'tbody',
+            components: rows.map((row) => ({
+                tagName: 'tr',
+                components: columns.map((column) => {
+                    const value = row[column.key] ?? '';
+                    const content: Array<Record<string, unknown>> = [text(value)];
+
+                    if (column.key === 'description' && row.note) {
+                        content.push({
+                            tagName: 'span',
+                            attributes: { class: 'db-note' },
+                            components: [text(row.note)],
+                            ...INERT,
+                        });
+                    }
+
+                    return cell('td', column, content);
+                }),
+                ...INERT,
+            })),
+            ...INERT,
+        },
+    ];
+}
+
+/**
  * Registers the components that carry meaning rather than markup.
  *
  * Both of them render a realistic preview in the canvas and export a single
@@ -82,7 +177,14 @@ function registerLineItems(editor: Editor, availableColumns: LineItemColumn[]): 
                     }
                 });
 
-                this.on('change', () => this.renderPreview());
+                // Only the column traits, never a blanket `change`. GrapesJS
+                // writes selection and hover state onto the model too, so a
+                // blanket listener rebuilds the preview on every click — which
+                // destroys the very cell the user just selected.
+                columns.forEach((column) => {
+                    this.on(`change:${traitNameFor(column)}`, () => this.renderPreview());
+                });
+
                 this.renderPreview();
             },
 
@@ -96,40 +198,7 @@ function registerLineItems(editor: Editor, availableColumns: LineItemColumn[]): 
             },
 
             renderPreview(this: any): void {
-                const active = this.activeColumns();
-
-                const head = active
-                    .map(
-                        (column: LineItemColumn) =>
-                            `<th class="db-align-${column.align ?? 'left'}">${escapeHtml(column.label)}</th>`,
-                    )
-                    .join('');
-
-                const body = SAMPLE_ROWS.map((row) => {
-                    const cells = active
-                        .map((column: LineItemColumn) => {
-                            const value = escapeHtml(row[column.key] ?? '');
-                            const note =
-                                column.key === 'description' && row.note
-                                    ? `<span class="db-note">${escapeHtml(row.note)}</span>`
-                                    : '';
-
-                            return `<td class="db-align-${column.align ?? 'left'}">${value}${note}</td>`;
-                        })
-                        .join('');
-
-                    return `<tr>${cells}</tr>`;
-                }).join('');
-
-                const cols = active
-                    .map((column: LineItemColumn) => `<col style="width: ${column.width}">`)
-                    .join('');
-
-                this.components(
-                    `<colgroup data-db-sample="1">${cols}</colgroup>` +
-                        `<thead data-db-sample="1"><tr>${head}</tr></thead>` +
-                        `<tbody data-db-sample="1">${body}</tbody>`,
-                );
+                this.components(tableTree(this.activeColumns(), SAMPLE_ROWS));
             },
 
             toHTML(): string {
@@ -137,6 +206,23 @@ function registerLineItems(editor: Editor, availableColumns: LineItemColumn[]): 
             },
         },
     });
+}
+
+function totalsRow(label: string, amount: string, rowClass = ''): Record<string, unknown> {
+    return {
+        tagName: 'tr',
+        ...(rowClass === '' ? {} : { attributes: { class: rowClass } }),
+        components: [
+            { tagName: 'td', components: [text(label)], ...INERT },
+            {
+                tagName: 'td',
+                attributes: { class: 'db-total-amount' },
+                components: [text(amount)],
+                ...INERT,
+            },
+        ],
+        ...INERT,
+    };
 }
 
 function registerTotals(editor: Editor): void {
@@ -151,12 +237,19 @@ function registerTotals(editor: Editor): void {
                 droppable: false,
                 editable: false,
                 copyable: false,
-                components:
-                    '<tbody data-db-sample="1">' +
-                    '<tr><td>Zwischensumme</td><td class="db-total-amount">73,00 €</td></tr>' +
-                    '<tr><td>zzgl. 19 % USt.</td><td class="db-total-amount">13,87 €</td></tr>' +
-                    '<tr class="db-total-gross"><td>Gesamtbetrag</td><td class="db-total-amount">86,87 €</td></tr>' +
-                    '</tbody>',
+                // Same reason as the line-item table: a markup string would be
+                // parsed outside a <table> and lose every row.
+                components: [
+                    {
+                        tagName: 'tbody',
+                        components: [
+                            totalsRow('Zwischensumme', '73,00 €'),
+                            totalsRow('zzgl. 19 % USt.', '13,87 €'),
+                            totalsRow('Gesamtbetrag', '86,87 €', 'db-total-gross'),
+                        ],
+                        ...INERT,
+                    },
+                ],
             },
 
             toHTML(): string {

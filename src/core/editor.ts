@@ -100,6 +100,7 @@ export function createDocumentBuilder(options: DocumentBuilderOptions): Document
     registerBlocks(editor);
     registerPlaceholderRteAction(editor, normalizedPlaceholders);
     enforceSingleInstance(editor);
+    redirectSelectionToOwner(editor);
 
     const instance: DocumentBuilderInstance = {
         editor,
@@ -205,6 +206,39 @@ function enforceSingleInstance(editor: Editor): void {
                 { level: 'warning' },
             );
         }
+    });
+}
+
+/**
+ * A click inside the preview selects the table, not the cell.
+ *
+ * The sample rows are scaffolding, not content. Selecting a `<td>` would show
+ * an empty settings panel and invite the user to style something that is
+ * regenerated on every change — the table itself is what has settings.
+ */
+function redirectSelectionToOwner(editor: Editor): void {
+    let redirecting = false;
+
+    editor.on('component:selected', (component: Component) => {
+        if (redirecting) {
+            return;
+        }
+
+        const owner =
+            component.closestType?.(LINE_ITEMS_TYPE) ?? component.closestType?.(TOTALS_TYPE);
+
+        if (!owner || owner === component) {
+            return;
+        }
+
+        // Deferred on purpose: this event fires *during* GrapesJS's own
+        // selection routine, and selecting re-entrantly is overwritten the
+        // moment that routine finishes. The redirect has to land after it.
+        redirecting = true;
+        setTimeout(() => {
+            editor.select(owner);
+            redirecting = false;
+        }, 0);
     });
 }
 
