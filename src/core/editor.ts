@@ -12,11 +12,13 @@ import type {
     DocumentDesign,
     LineItemColumn,
     PageSetup,
+    ZoneName,
 } from './types';
+import { buildZones, registerZones, zoneHtml } from './zones';
 import { insertPlaceholder, normalizePlaceholders, registerPlaceholderRteAction } from './variables';
 
-/** What a fresh template starts with. */
-const STARTER_HTML =
+/** Womit der Mittelteil einer frischen Vorlage beginnt. */
+const STARTER_BODY =
     '<p>Sehr geehrte Damen und Herren,</p>' +
     '<p>vielen Dank für Ihre Anfrage. Gern unterbreiten wir Ihnen folgendes Angebot.</p>' +
     '<table data-db-block="line-items" class="db-line-items"></table>' +
@@ -33,6 +35,7 @@ export function createDocumentBuilder(options: DocumentBuilderOptions): Document
         locale = 'de',
         theme = 'light',
         skeletonPreview = {},
+        defaults = {},
         onUploadImage,
         onChange,
         onReady,
@@ -101,6 +104,7 @@ export function createDocumentBuilder(options: DocumentBuilderOptions): Document
         fontProperty.set('options', FONT_STACKS);
     }
 
+    registerZones(editor);
     registerComponents(editor, availableColumns);
     registerBlocks(editor);
     registerPlaceholderRteAction(editor, normalizedPlaceholders);
@@ -110,17 +114,22 @@ export function createDocumentBuilder(options: DocumentBuilderOptions): Document
     const instance: DocumentBuilderInstance = {
         editor,
 
-        getHtml(): string {
-            // The wrapper element itself is not part of the body — the preset
-            // supplies everything around it.
-            const body = String(editor.getHtml({ cleanId: true }) ?? '')
-                .replace(/^<body[^>]*>/i, '')
-                .replace(/<\/body>$/i, '')
-                .trim();
+        getZone(zone: ZoneName): string {
+            const html = zoneHtml(editor, zone);
 
+            if (zone !== 'body') {
+                return html;
+            }
+
+            // Eigene Stilregeln hängen am Rumpf. Sie einmal auszugeben reicht —
+            // das Preset setzt alle drei Zonen in dasselbe Dokument.
             const css = String(editor.getCss({ avoidProtected: true }) ?? '').trim();
 
-            return css === '' ? body : `<style>${css}</style>${body}`;
+            return css === '' ? html : `<style>${css}</style>${html}`;
+        },
+
+        getHtml(): string {
+            return this.getZone('body');
         },
 
         getColumns(): LineItemColumn[] {
@@ -131,7 +140,9 @@ export function createDocumentBuilder(options: DocumentBuilderOptions): Document
 
         getDesign(): DocumentDesign {
             return {
-                html: this.getHtml(),
+                header: this.getZone('header'),
+                body: this.getZone('body'),
+                footer: this.getZone('footer'),
                 project: editor.getProjectData() as Record<string, unknown>,
                 columns: this.getColumns(),
             };
@@ -142,7 +153,15 @@ export function createDocumentBuilder(options: DocumentBuilderOptions): Document
                 editor.loadProjectData(next.project);
             } else {
                 editor.Components.getWrapper()?.set('content', '');
-                editor.setComponents(next?.html?.trim() ? next.html : STARTER_HTML);
+                editor.setComponents(
+                    buildZones({
+                        header: next?.header ?? defaults.header ?? '',
+                        // `html` ist die alte Einfeld-Fassung: als Rumpf lesen,
+                        // damit gespeicherte Entwürfe nicht verfallen.
+                        body: next?.body ?? next?.html ?? STARTER_BODY,
+                        footer: next?.footer ?? defaults.footer ?? '',
+                    }),
+                );
             }
 
             editor.UndoManager.clear();

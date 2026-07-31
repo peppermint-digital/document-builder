@@ -60,10 +60,23 @@ export interface PlaceholderDefinition {
  * `{{ line_items }}`, and how that table is built is structured data.
  */
 export interface DocumentDesign {
-    html: string;
+    /** Der Briefkopf über dem Anschriftfeld. Nur erste Seite. */
+    header: string;
+    /** Der freie Mittelteil zwischen Betreffzeile und Seitenende. */
+    body: string;
+    /** Die Fußzeile mit den Pflichtangaben. Auf jeder Seite. */
+    footer: string;
     project: Record<string, unknown>;
     columns: LineItemColumn[];
+    /**
+     * @deprecated Frühere Fassungen hatten nur ein HTML-Feld. Wird beim Laden
+     * noch als Rumpf akzeptiert, damit gespeicherte Entwürfe nicht verfallen.
+     */
+    html?: string;
 }
+
+/** Die drei bearbeitbaren Bereiche des Blattes. */
+export type ZoneName = 'header' | 'body' | 'footer';
 
 /** Options handed to the editor when it is mounted. */
 export interface DocumentBuilderOptions {
@@ -78,6 +91,14 @@ export interface DocumentBuilderOptions {
     theme?: 'light' | 'dark';
     /** Rendered behind the free zone so the user sees a realistic page. */
     skeletonPreview?: SkeletonPreview;
+    /**
+     * Inhalte, mit denen leere Zonen beim ersten Öffnen vorbelegt werden.
+     *
+     * Vor allem für die Fußzeile gedacht: wer nichts anfasst, soll trotzdem
+     * korrekte Pflichtangaben bekommen, statt sie in jeder Vorlage neu zu
+     * tippen.
+     */
+    defaults?: Partial<Record<ZoneName, string>>;
     onChange?: (design: DocumentDesign) => void;
     onUploadImage?: (file: File) => Promise<string>;
     onReady?: (instance: DocumentBuilderInstance) => void;
@@ -100,8 +121,10 @@ export interface SkeletonPreview {
 
 export interface DocumentBuilderInstance {
     editor: Editor;
-    /** The body HTML for the free zones. */
+    /** The body HTML — the free zone between subject line and footer. */
     getHtml(): string;
+    /** HTML of a single zone. */
+    getZone(zone: ZoneName): string;
     /** Everything worth storing. */
     getDesign(): DocumentDesign;
     /** Columns currently configured on the line-item table. */

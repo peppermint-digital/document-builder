@@ -57,7 +57,6 @@ export function canvasCss(page: PageSetup, preview: SkeletonPreview = {}): strin
                body { margin: 0 } einspielt und das Blatt sonst links klebt. */
             margin: 8mm auto !important;
             padding: ${page.marginTop}mm ${page.marginRight}mm ${page.marginBottom}mm ${page.marginLeft}mm;
-            padding-top: ${page.marginTop + bodyOffset}mm;
             background: #ffffff;
             box-shadow: 0 1px 3px rgba(15, 23, 42, 0.18);
             font-family: "DejaVu Sans", Helvetica, Arial, sans-serif;
@@ -121,17 +120,42 @@ export function canvasCss(page: PageSetup, preview: SkeletonPreview = {}): strin
         .db-canvas-fold-2 { top: ${page.marginTop + foldTwo}mm; }
         .db-canvas-hole { top: ${page.marginTop + hole}mm; width: 8mm; }
 
-        .db-canvas-footer {
+        /* Die drei Zonen. Position und Höhe gehören dem Gerüst — hier wird nur
+           sichtbar gemacht, wo sie liegen. */
+        .db-zone { position: relative; }
+
+        .db-zone-header {
+            position: absolute;
+            top: ${page.marginTop}mm;
+            left: ${page.marginLeft}mm;
+            right: ${page.marginRight}mm;
+            min-height: 12mm;
+            overflow: hidden;
+        }
+
+        .db-zone-body { margin-top: ${bodyOffset}mm; }
+
+        .db-zone-footer {
             position: absolute;
             left: ${page.marginLeft}mm;
             right: ${page.marginRight}mm;
             bottom: 8mm;
-            height: 18mm;
+            min-height: 12mm;
             border-top: 0.3mm dashed #cbd5e1;
             padding-top: 1.5mm;
             font-size: 7pt;
+            color: #475569;
+        }
+
+        /* Leere Zonen sind sonst unsichtbar und niemand fände sie zum Befüllen. */
+        .db-zone-header:empty::after { content: 'Briefkopf — hier Bausteine ablegen'; }
+        .db-zone-footer:empty::after { content: 'Fußzeile — hier Bausteine ablegen'; }
+        .db-zone-header:empty::after,
+        .db-zone-footer:empty::after {
+            display: block;
+            font-size: 7pt;
             color: #94a3b8;
-            pointer-events: none;
+            font-style: italic;
         }
 
         /* Blocks the builder places. Deliberately close to the print CSS. */
@@ -186,7 +210,6 @@ export function skeletonHtml(preview: SkeletonPreview = {}): string {
         '<div class="db-canvas-mark db-canvas-fold-2" data-db-skeleton="1"></div>',
         '<div class="db-canvas-mark db-canvas-hole" data-db-skeleton="1"></div>',
         `<div class="db-canvas-subject" data-db-skeleton="1">${escapeHtml(subject)}</div>`,
-        '<div class="db-canvas-footer" data-db-skeleton="1">Fußzeile mit Pflichtangaben — vom Dokument gefüllt</div>',
     ].join('');
 }
 
