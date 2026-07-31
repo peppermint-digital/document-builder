@@ -36,6 +36,12 @@
 .pm-document-builder .gjs-four-color-h:hover { color: var(--db-text); }
 
 .pm-document-builder .gjs-pn-panel { border-color: var(--db-border); }
+
+/* Geräte-Umschalter: ein Dokument ist immer DIN A4, es gibt nichts zu wählen. */
+.pm-document-builder .gjs-pn-devices-c,
+.pm-document-builder .gjs-devices-c {
+    display: none;
+}
 .pm-document-builder .gjs-blocks-c { gap: 0.5rem; padding: 0.5rem; }
 
 .pm-document-builder .gjs-block {

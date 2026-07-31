@@ -13,47 +13,67 @@ use Peppermint\DocumentBuilder\Data\Totals;
 class TotalsRenderer
 {
     /**
+     * The summary lines as label/amount pairs, already formatted.
+     *
+     * Exposed separately so the line-item table can absorb them as trailing
+     * rows — see {@see LineItemsRenderer::render()} for why that matters.
+     *
+     * @param  array{net_label?: string, gross_label?: string, currency?: string, decimal_separator?: string, thousands_separator?: string}  $options
+     * @return list<array{label: string, amount: string, class: string}>
+     */
+    public function rows(Totals $totals, array $options = []): array
+    {
+        $rows = [[
+            'label' => (string) ($options['net_label'] ?? 'Zwischensumme'),
+            'amount' => $this->money($totals->net, $totals, $options),
+            'class' => '',
+        ]];
+
+        foreach ($totals->additional as $line) {
+            $rows[] = [
+                'label' => (string) $line['label'],
+                'amount' => $this->money((float) $line['amount'], $totals, $options),
+                'class' => '',
+            ];
+        }
+
+        foreach ($totals->taxes as $tax) {
+            $rows[] = [
+                'label' => (string) $tax['label'],
+                'amount' => $this->money((float) $tax['amount'], $totals, $options),
+                'class' => '',
+            ];
+        }
+
+        $rows[] = [
+            'label' => (string) ($options['gross_label'] ?? 'Gesamtbetrag'),
+            'amount' => $this->money($totals->gross, $totals, $options),
+            'class' => 'db-total-gross',
+        ];
+
+        return $rows;
+    }
+
+    /**
+     * The standalone summary table, for templates that place the block away
+     * from the line items.
+     *
      * @param  array{net_label?: string, gross_label?: string, currency?: string, decimal_separator?: string, thousands_separator?: string}  $options
      */
     public function render(Totals $totals, array $options = []): string
     {
-        $rows = $this->row(
-            (string) ($options['net_label'] ?? 'Zwischensumme'),
-            $totals->net,
-            $totals,
-            $options,
-        );
+        $html = '';
 
-        foreach ($totals->additional as $line) {
-            $rows .= $this->row((string) $line['label'], (float) $line['amount'], $totals, $options);
+        foreach ($this->rows($totals, $options) as $row) {
+            $attribute = $row['class'] === '' ? '' : ' class="'.$this->escape($row['class']).'"';
+
+            $html .= '<tr'.$attribute.'>'
+                .'<td>'.$this->escape($row['label']).'</td>'
+                .'<td class="db-total-amount">'.$this->escape($row['amount']).'</td>'
+                .'</tr>';
         }
 
-        foreach ($totals->taxes as $tax) {
-            $rows .= $this->row((string) $tax['label'], (float) $tax['amount'], $totals, $options);
-        }
-
-        $rows .= $this->row(
-            (string) ($options['gross_label'] ?? 'Gesamtbetrag'),
-            $totals->gross,
-            $totals,
-            $options,
-            'db-total-gross',
-        );
-
-        return '<table class="db-totals">'.$rows.'</table>';
-    }
-
-    /**
-     * @param  array<string, mixed>  $options
-     */
-    private function row(string $label, float $amount, Totals $totals, array $options, string $class = ''): string
-    {
-        $attribute = $class === '' ? '' : ' class="'.$this->escape($class).'"';
-
-        return '<tr'.$attribute.'>'
-            .'<td>'.$this->escape($label).'</td>'
-            .'<td class="db-total-amount">'.$this->escape($this->money($amount, $totals, $options)).'</td>'
-            .'</tr>';
+        return '<table class="db-totals">'.$html.'</table>';
     }
 
     /**

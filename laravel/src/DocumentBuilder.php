@@ -24,6 +24,9 @@ class DocumentBuilder
 
     private const BLOCK_TOTALS = "\0db:totals\0";
 
+    /** Summenblock direkt hinter der Tabelle, höchstens Leerraum dazwischen. */
+    private const ADJACENT_PATTERN = "/\0db:line-items\0\s*\0db:totals\0/";
+
     public function __construct(
         private readonly DocumentPreset $preset,
         private readonly DocumentRenderer $renderer,
@@ -55,11 +58,24 @@ class DocumentBuilder
 
         $body = $this->placeholders->renderHtml($body, $data->placeholders());
 
+        // Steht der Summenblock unmittelbar hinter der Tabelle, wird er zu
+        // deren Schlusszeilen. Als eigener Block mit `page-break-inside: avoid`
+        // springt er sonst komplett auf die nächste Seite und steht dort allein.
+        $merge = $data->totals !== null && $this->totalsFollowLineItems($body);
+        $totalRows = [];
+
+        if ($merge) {
+            $totalRows = $this->totals->rows($data->totals, $options);
+
+            // Aus zwei Marken wird eine — die Summen kommen jetzt aus der Tabelle.
+            $body = (string) preg_replace(self::ADJACENT_PATTERN, self::BLOCK_LINE_ITEMS, $body);
+        }
+
         $body = str_replace(
             [self::BLOCK_LINE_ITEMS, self::BLOCK_TOTALS],
             [
-                $this->lineItems->render($data->lineItems, $options),
-                $data->totals !== null ? $this->totals->render($data->totals, $options) : '',
+                $this->lineItems->render($data->lineItems, $options, $totalRows),
+                $data->totals !== null && ! $merge ? $this->totals->render($data->totals, $options) : '',
             ],
             $body,
         );
@@ -78,6 +94,18 @@ class DocumentBuilder
         $page ??= PageSetup::din5008();
 
         return $this->renderer->render($this->html($data, $body, $page, $options), $page);
+    }
+
+    /**
+     * Whether the template puts the summary straight after the item table.
+     *
+     * A template is free to place them apart — an outro paragraph in between is
+     * a legitimate layout. Only the adjacent case gets merged, so the rule
+     * stays inspectable rather than magic.
+     */
+    private function totalsFollowLineItems(string $body): bool
+    {
+        return preg_match(self::ADJACENT_PATTERN, $body) === 1;
     }
 
     /**

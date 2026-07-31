@@ -53,7 +53,9 @@ export function canvasCss(page: PageSetup, preview: SkeletonPreview = {}): strin
             box-sizing: border-box;
             width: ${width}mm;
             min-height: ${paperSize(page).height}mm;
-            margin: 8mm auto;
+            /* !important, weil GrapesJS nach diesem Stylesheet ein eigenes
+               body { margin: 0 } einspielt und das Blatt sonst links klebt. */
+            margin: 8mm auto !important;
             padding: ${page.marginTop}mm ${page.marginRight}mm ${page.marginBottom}mm ${page.marginLeft}mm;
             padding-top: ${page.marginTop + bodyOffset}mm;
             background: #ffffff;

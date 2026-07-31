@@ -187,9 +187,42 @@ class Din5008Preset implements DocumentPreset
         .db-align-right { text-align: right; }
         .db-align-center { text-align: center; }
 
-        /* Totals must never be torn across a page break. */
+        /* Summary rows living inside the item table — the default, because a
+           standalone block lands alone on an empty last sheet whenever it does
+           not fit in the remaining space. */
+        /* Die Schlussgruppe: letzte Positionszeile plus Summen, unteilbar. */
+        table.db-line-items td.db-closing-cell {
+            padding: 0;
+            border-bottom: none;
+        }
+        table.db-closing {
+            width: 100%;
+            border-collapse: collapse;
+            page-break-inside: avoid;
+        }
+        table.db-closing td {
+            padding: 1.5mm 1mm;
+            vertical-align: top;
+            border-bottom: 0.1mm solid #dddddd;
+        }
+        table.db-closing tr.db-total-row td {
+            border-bottom: none;
+            padding-top: 1.2mm;
+            padding-bottom: 1.2mm;
+        }
+        table.db-closing .db-total-label { text-align: right; }
+        table.db-closing tr.db-total-row:first-child td { padding-top: 4mm; }
+        table.db-closing tr.db-total-gross td {
+            border-top: 0.4mm solid {$accent};
+            font-weight: bold;
+        }
+
+        /* The standalone block, for templates that place it away from the table.
+           `page-break-before: avoid` is intentional even though DomPDF ignores
+           it — a browser-based renderer driver does honour it. */
         table.db-totals {
             page-break-inside: avoid;
+            page-break-before: avoid;
             margin-top: 6mm;
             margin-left: auto;
             width: 70mm;

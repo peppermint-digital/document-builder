@@ -32,10 +32,20 @@ class LineItemsRenderer
     ];
 
     /**
+     * Renders the table, optionally absorbing the summary as trailing rows.
+     *
+     * Absorbing is not cosmetic. As a separate block the summary carries
+     * `page-break-inside: avoid`, so when it does not fit in the remaining space
+     * it jumps to the next page *whole* — and nothing pulls a line item along,
+     * leaving the summary alone on an otherwise empty last sheet. In ten
+     * measured table lengths that happened three times. As table rows it flows
+     * with the rows before it and the case disappears.
+     *
      * @param  list<LineItem>  $items
      * @param  array{columns?: list<array{key: string, label: string, width: string, align?: string, format?: string}>, currency?: string, decimal_separator?: string, thousands_separator?: string, empty_text?: string}  $options
+     * @param  list<array{label: string, amount: string, class: string}>  $totalRows
      */
-    public function render(array $items, array $options = []): string
+    public function render(array $items, array $options = [], array $totalRows = []): string
     {
         $columns = $options['columns'] ?? self::DEFAULT_COLUMNS;
 
@@ -49,13 +59,15 @@ class LineItemsRenderer
                 .'</th>';
         }
 
-        $body = '';
+        $rows = array_map(fn (LineItem $item): string => $this->renderRow($item, $columns, $options), $items);
 
-        foreach ($items as $item) {
-            $body .= $this->renderRow($item, $columns, $options);
-        }
+        // Die letzte Positionszeile wandert in die Schlussgruppe, damit sie den
+        // Summenblock nicht allein auf einer leeren Seite zurücklässt.
+        $tail = $totalRows !== [] && $rows !== [] ? array_pop($rows) : '';
 
-        if ($body === '') {
+        $body = implode('', $rows);
+
+        if ($body === '' && $tail === '') {
             $body = '<tr><td class="db-empty" colspan="'.count($columns).'">'
                 .$this->escape($options['empty_text'] ?? '—')
                 .'</td></tr>';
@@ -66,8 +78,47 @@ class LineItemsRenderer
             // <thead> is what makes the header repeat after a page break.
             // Verified against DomPDF; do not fold these rows into <tbody>.
             .'<thead><tr>'.$head.'</tr></thead>'
-            .'<tbody>'.$body.'</tbody>'
+            .($body === '' ? '' : '<tbody>'.$body.'</tbody>')
+            .$this->closingGroup($tail, $totalRows, count($columns), $colgroup)
             .'</table>';
+    }
+
+    /**
+     * The last item row and the summary rows as one unbreakable group.
+     *
+     * Absorbing the summary into the table is not enough on its own: rows flow
+     * individually, so the summary rows alone still move to a fresh page when
+     * they do not fit. Keeping them together with the row above means the group
+     * either fits or moves as a whole — and a moved group carries a line item
+     * with it, so the last sheet is never just a summary.
+     *
+     * @param  list<array{label: string, amount: string, class: string}>  $rows
+     */
+    private function closingGroup(string $lastItemRow, array $rows, int $columnCount, string $colgroup): string
+    {
+        if ($rows === []) {
+            return $lastItemRow === '' ? '' : '<tbody>'.$lastItemRow.'</tbody>';
+        }
+
+        $labelSpan = max($columnCount - 1, 1);
+        $html = $lastItemRow;
+
+        foreach ($rows as $row) {
+            $class = trim('db-total-row '.$row['class']);
+
+            $html .= '<tr class="'.$this->escape($class).'">'
+                .'<td class="db-total-label" colspan="'.$labelSpan.'">'.$this->escape($row['label']).'</td>'
+                .'<td class="db-align-right">'.$this->escape($row['amount']).'</td>'
+                .'</tr>';
+        }
+
+        // Als verschachtelte Tabelle in einer einzigen Zelle. DomPDF beachtet
+        // `page-break-inside` weder auf <tbody> noch auf <tr> — beides gemessen
+        // und verworfen —, wohl aber auf einer Tabelle. Die äußere Zeile wandert
+        // damit als Ganzes und nimmt die Positionszeile mit.
+        return '<tbody class="db-totals-rows"><tr><td class="db-closing-cell" colspan="'.$columnCount.'">'
+            .'<table class="db-closing"><colgroup>'.$colgroup.'</colgroup><tbody>'.$html.'</tbody></table>'
+            .'</td></tr></tbody>';
     }
 
     /**

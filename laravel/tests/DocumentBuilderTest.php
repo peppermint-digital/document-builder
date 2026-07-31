@@ -18,12 +18,33 @@ function builder(): DocumentBuilder
     );
 }
 
-it('expands the two block tokens to markup', function (): void {
+it('absorbs the summary into the table when the template puts them together', function (): void {
+    // A standalone summary block jumps to the next page whole when it does not
+    // fit, and lands alone on an empty last sheet. As trailing rows it flows
+    // with the items before it.
     $html = builder()->html(offer(), '{{ line_items }}{{ totals }}');
 
     expect($html)->toContain('<table class="db-line-items">')
-        ->and($html)->toContain('<table class="db-totals">')
+        ->and($html)->toContain('<tbody class="db-totals-rows">')
+        ->and($html)->not->toContain('<table class="db-totals">')
+        ->and($html)->toContain('Gesamtbetrag')
         ->and($html)->not->toContain('{{');
+});
+
+it('keeps the summary standalone when the template separates the two', function (): void {
+    // Placing an outro between them is a legitimate layout, so the merge only
+    // applies to the adjacent case — the rule stays inspectable.
+    $html = builder()->html(offer(), '{{ line_items }}<p>Vielen Dank.</p>{{ totals }}');
+
+    expect($html)->toContain('<table class="db-totals">')
+        ->and($html)->not->toContain('<tbody class="db-totals-rows">');
+});
+
+it('spans the summary label across every column but the last', function (): void {
+    $html = builder()->html(offer(), '{{ line_items }}{{ totals }}');
+
+    // Sechs Standardspalten -> Label über fünf, Betrag in der letzten.
+    expect($html)->toContain('colspan="5"');
 });
 
 it('substitutes value placeholders and escapes them', function (): void {

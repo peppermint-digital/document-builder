@@ -53,6 +53,11 @@ export function createDocumentBuilder(options: DocumentBuilderOptions): Document
         storageManager: false,
         undoManager: { trackSelection: false },
         canvasCss: canvasCss(page, skeletonPreview),
+        // Ein Dokument hat genau ein Format: das Blatt. Breakpoints gibt es im
+        // Druck nicht. Die Leiste selbst wird in styles.css ausgeblendet —
+        // `Panels.removePanel('devices-c')` greift nicht, GrapesJS baut sie
+        // beim Rendern erneut auf und zeigt dann ein leeres Auswahlfeld.
+        deviceManager: { devices: [] },
         colorPicker: { palette: [BRAND_COLORS] },
         assetManager: {
             upload: false,
