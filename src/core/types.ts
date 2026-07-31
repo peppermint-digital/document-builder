@@ -1,3 +1,5 @@
+import type { Editor } from 'grapesjs';
+
 /**
  * The typed contract between the editor and the PHP side.
  *
@@ -31,16 +33,6 @@ export interface LineItemColumn {
     format?: ColumnFormat;
 }
 
-/** The columns a German business document shows by default. */
-export const DEFAULT_COLUMNS: LineItemColumn[] = [
-    { key: 'position', label: 'Pos.', width: '7%', align: 'right' },
-    { key: 'description', label: 'Bezeichnung', width: '45%' },
-    { key: 'quantity', label: 'Menge', width: '10%', align: 'right', format: 'decimal' },
-    { key: 'unit', label: 'Einheit', width: '10%' },
-    { key: 'unit_price', label: 'Einzelpreis', width: '14%', align: 'right', format: 'currency' },
-    { key: 'total', label: 'Gesamt', width: '14%', align: 'right', format: 'currency' },
-];
-
 /** Page geometry in millimetres — mirrors `Data\PageSetup`. */
 export interface PageSetup {
     paper: 'A4' | 'A5' | 'A3' | 'LETTER' | 'LEGAL';
@@ -51,25 +43,6 @@ export interface PageSetup {
     marginLeft: number;
 }
 
-/** DIN 5008 form B — the default. */
-export const DIN_5008: PageSetup = {
-    paper: 'A4',
-    orientation: 'portrait',
-    marginTop: 16.9,
-    marginRight: 20,
-    marginBottom: 30,
-    marginLeft: 24.1,
-};
-
-/**
- * The zones a template may edit.
- *
- * Everything outside this list belongs to the preset and is not editable —
- * on an invoice, the freedom to move the tax number is a liability, not a
- * feature.
- */
-export type FreeZone = 'intro' | 'afterLineItems' | 'outro' | 'attachments';
-
 /** A placeholder the editor offers in its variable picker. */
 export interface PlaceholderDefinition {
     key: string;
@@ -78,18 +51,63 @@ export interface PlaceholderDefinition {
     example?: string;
 }
 
+/**
+ * What the editor hands back for storage.
+ *
+ * `html` is the body for the free zones — the thing the PHP side prints.
+ * `project` is the editable design. `columns` is the line-item configuration,
+ * which lives beside the HTML rather than inside it: the body only ever says
+ * `{{ line_items }}`, and how that table is built is structured data.
+ */
+export interface DocumentDesign {
+    html: string;
+    project: Record<string, unknown>;
+    columns: LineItemColumn[];
+}
+
 /** Options handed to the editor when it is mounted. */
 export interface DocumentBuilderOptions {
     container: HTMLElement;
-    /** The stored design, or `null` for a fresh template. */
-    design?: Record<string, unknown> | null;
-    preset?: string;
+    /** A previously stored design, or `undefined` for a fresh template. */
+    design?: DocumentDesign | null;
     page?: Partial<PageSetup>;
-    columns?: LineItemColumn[];
-    placeholders?: PlaceholderDefinition[];
+    /** Columns offered in the line-item trait panel. */
+    availableColumns?: LineItemColumn[];
+    placeholders?: PlaceholderDefinition[] | Record<string, string>;
     locale?: 'de' | 'en';
     theme?: 'light' | 'dark';
-    onChange?: (design: Record<string, unknown>, html: string) => void;
+    /** Rendered behind the free zone so the user sees a realistic page. */
+    skeletonPreview?: SkeletonPreview;
+    onChange?: (design: DocumentDesign) => void;
     onUploadImage?: (file: File) => Promise<string>;
-    onReady?: () => void;
+    onReady?: (instance: DocumentBuilderInstance) => void;
+    /** Escape hatch for raw GrapesJS config. */
+    grapesConfig?: Record<string, unknown>;
+}
+
+/**
+ * The parts of the page the preset owns. Shown in the canvas as context, never
+ * editable — a user must be able to see where their text lands relative to the
+ * address field without being able to move the address field.
+ */
+export interface SkeletonPreview {
+    recipientLines?: string[];
+    metaLines?: Array<{ label: string; value: string }>;
+    subject?: string;
+    footerColumns?: string[][];
+    logoUrl?: string;
+}
+
+export interface DocumentBuilderInstance {
+    editor: Editor;
+    /** The body HTML for the free zones. */
+    getHtml(): string;
+    /** Everything worth storing. */
+    getDesign(): DocumentDesign;
+    /** Columns currently configured on the line-item table. */
+    getColumns(): LineItemColumn[];
+    loadDesign(design: DocumentDesign | null): void;
+    insertPlaceholder(key: string): void;
+    isEmpty(): boolean;
+    destroy(): void;
 }

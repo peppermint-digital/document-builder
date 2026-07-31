@@ -7,13 +7,20 @@
       "types": "./dist/core/index.d.ts",
       "import": "./dist/core/index.mjs",
       "require": "./dist/core/index.js"
-    }
+    },
+    "./react": {
+      "types": "./dist/react/index.d.ts",
+      "import": "./dist/react/index.mjs",
+      "require": "./dist/react/index.js"
+    },
+    "./styles.css": "./dist/styles.css"
   },
   "files": [
     "dist"
   ],
   "scripts": {
-    "build": "tsup",
+    "build": "tsup && npm run build:css",
+    "build:css": "node scripts/copy-css.mjs",
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
     "prepare": "npm run build",

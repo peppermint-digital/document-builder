@@ -1,14 +1,17 @@
+export { createDocumentBuilder } from './editor';
+export { DEFAULT_COLUMNS, DIN_5008, fromPaperLeft, fromPaperTop, paperSize } from './defaults';
+export { LINE_ITEMS_TYPE, TOTALS_TYPE } from './components';
+export { normalizePlaceholders, tokenFor } from './variables';
+export { BRAND_COLORS, FONT_STACKS } from './theme';
+
 export type {
     ColumnAlign,
     ColumnFormat,
+    DocumentBuilderInstance,
     DocumentBuilderOptions,
-    FreeZone,
+    DocumentDesign,
     LineItemColumn,
     PageSetup,
     PlaceholderDefinition,
+    SkeletonPreview,
 } from './types';
-
-export { DEFAULT_COLUMNS, DIN_5008 } from './types';
-
-// The GrapesJS editor lands here next. The types above are published already so
-// the host application can type its template settings against them today.
