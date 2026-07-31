@@ -116,6 +116,15 @@ class Din5008Preset implements DocumentPreset
         .db-mark-fold-2 { top: {$foldTwo}mm; }
         .db-mark-hole { top: {$hole}mm; width: 8mm; }
 
+        /* Briefkopf über dem Anschriftfeld. Absolut positioniert und damit nur
+           auf der ersten Seite — genau wie beim gewachsenen Pfad. */
+        .db-header {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+        }
+
         /* Address field, form B. Out of flow — first page only. */
         .db-address {
             position: absolute;
@@ -263,6 +272,7 @@ class Din5008Preset implements DocumentPreset
             $this->marks($options),
             $this->watermark($options),
             $this->footer($data, $options),
+            $this->header($options),
             $this->logo($options),
             $this->addressField($data),
             $this->infoBlock($data),
@@ -324,12 +334,42 @@ class Din5008Preset implements DocumentPreset
 
         $width = (float) ($options['logo_width'] ?? 45);
         $top = (float) ($options['logo_top'] ?? 0);
-        $align = (string) ($options['logo_align'] ?? 'right');
-        $side = $align === 'left' ? 'left: 0;' : 'right: 0;';
+        $height = isset($options['logo_height']) ? (float) $options['logo_height'] : null;
 
-        return '<div style="position: absolute; top: '.$top.'mm; '.$side.'">'
-            .'<img src="'.$this->escape($source).'" style="width: '.$width.'mm;">'
+        $placement = match ((string) ($options['logo_align'] ?? 'right')) {
+            'left' => 'left: 0;',
+            // Zentriert wird über die volle Inhaltsbreite, nicht über `margin:
+            // auto` — das greift bei absoluter Positionierung nicht.
+            'center' => 'left: 0; right: 0; text-align: center;',
+            default => 'right: 0;',
+        };
+
+        $size = 'width: '.$width.'mm;'.($height !== null ? ' height: '.$height.'mm;' : '');
+
+        return '<div style="position: absolute; top: '.$top.'mm; '.$placement.'">'
+            .'<img src="'.$this->escape($source).'" style="'.$size.'">'
             .'</div>';
+    }
+
+    /**
+     * Der Kopfbereich über dem Anschriftfeld.
+     *
+     * Nur auf der ersten Seite, wie beim gewachsenen Pfad — ein Briefkopf, der
+     * sich auf Seite vier wiederholt, ist keiner.
+     *
+     * @param  array<string, mixed>  $options
+     */
+    private function header(array $options): string
+    {
+        $html = (string) ($options['header_html'] ?? '');
+
+        if (trim($html) === '') {
+            return '';
+        }
+
+        $height = (float) ($options['header_height'] ?? 25);
+
+        return '<div class="db-header" style="height: '.$height.'mm; overflow: hidden;">'.$html.'</div>';
     }
 
     private function addressField(DocumentData $data): string
@@ -372,6 +412,17 @@ class Din5008Preset implements DocumentPreset
      */
     private function footer(DocumentData $data, array $options): string
     {
+        // Eigene Fußzeile der Vorlage hat Vorrang. Ohne sie bleibt der Aufbau
+        // aus den Absenderdaten — ein Dokument soll nie ohne Pflichtangaben
+        // gedruckt werden, nur weil niemand eine Fußzeile gepflegt hat.
+        $html = (string) ($options['footer_html'] ?? '');
+
+        if (trim($html) !== '') {
+            $height = (float) ($options['footer_height'] ?? 18);
+
+            return '<div class="db-footer" style="height: '.$height.'mm;">'.$html.'</div>';
+        }
+
         /** @var list<list<string>> $columns */
         $columns = $options['footer_columns'] ?? [];
 

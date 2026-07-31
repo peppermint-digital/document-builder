@@ -80,6 +80,15 @@ class DocumentBuilder
             $body,
         );
 
+        // Kopf- und Fußzeile enthalten dieselben Platzhalter wie der Rumpf —
+        // eine Fußzeile mit roher {{ sender.iban }} im PDF wäre der Fehler,
+        // den der Platzhalter verhindern soll.
+        foreach (['header_html', 'footer_html'] as $slot) {
+            if (isset($options[$slot]) && is_string($options[$slot])) {
+                $options[$slot] = $this->placeholders->renderHtml($options[$slot], $data->placeholders());
+            }
+        }
+
         return $this->preset->render($data, $body, $page, $options);
     }
 
