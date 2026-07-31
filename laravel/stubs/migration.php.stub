@@ -1,0 +1,25 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+use Peppermint\DocumentBuilder\Support\DocumentBuilderSchema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::table('{{ table }}', function (Blueprint $table): void {
+            // Pass null instead of a column name when creating a NEW table:
+            // MySQL only accepts AFTER inside ALTER TABLE.
+            DocumentBuilderSchema::addColumns($table, '{{ after }}');
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::table('{{ table }}', function (Blueprint $table): void {
+            DocumentBuilderSchema::dropColumns($table);
+        });
+    }
+};

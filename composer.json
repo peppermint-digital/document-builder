@@ -1,0 +1,65 @@
+{
+    "name": "peppermint/document-builder",
+    "description": "Laravel side of the Peppermint Document Builder: print-ready business documents (offers, order confirmations, invoices, delivery notes) from drag & drop templates. Ships a DIN 5008 preset, a line-item renderer and a swappable PDF renderer driver.",
+    "type": "library",
+    "license": "MIT",
+    "keywords": [
+        "laravel",
+        "pdf",
+        "document",
+        "template",
+        "invoice",
+        "din5008",
+        "dompdf",
+        "drag-and-drop",
+        "builder"
+    ],
+    "authors": [
+        {
+            "name": "Peppermint Digital"
+        }
+    ],
+    "require": {
+        "php": "^8.2",
+        "illuminate/support": "^11.0|^12.0|^13.0",
+        "illuminate/database": "^11.0|^12.0|^13.0",
+        "illuminate/http": "^11.0|^12.0|^13.0"
+    },
+    "require-dev": {
+        "dompdf/dompdf": "^3.0",
+        "laravel/pint": "^1.0",
+        "orchestra/testbench": "^9.0|^10.0|^11.0",
+        "pestphp/pest": "^3.0"
+    },
+    "suggest": {
+        "dompdf/dompdf": "Required for the bundled DomPdfRenderer driver (^3.0)."
+    },
+    "autoload": {
+        "psr-4": {
+            "Peppermint\\DocumentBuilder\\": "laravel/src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Peppermint\\DocumentBuilder\\Tests\\": "laravel/tests/"
+        },
+        "files": [
+            "laravel/tests/Helpers.php"
+        ]
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Peppermint\\DocumentBuilder\\DocumentBuilderServiceProvider"
+            ]
+        }
+    },
+    "config": {
+        "allow-plugins": {
+            "pestphp/pest-plugin": true
+        },
+        "sort-packages": true
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}
