@@ -96,3 +96,21 @@ it('renders a single card as a sheet of one', function (): void {
     expect(substr_count($html, 'class="db-card"'))->toBe(1)
         ->and($html)->toContain('Anna Ahlers');
 });
+
+it('appends a design\'s own CSS once, after the skeleton', function (): void {
+    $sheet = SheetSetup::grid(61, 54, columns: 2, rows: 2);
+    $css = (new CardPreset($sheet))->css($sheet->page, ['card_css' => '.badge { color: rebeccapurple; }']);
+
+    // Nach dem Skelett, damit ein Entwurf gezielt ueberschreiben kann.
+    expect($css)->toContain('rebeccapurple')
+        ->and(strpos($css, 'rebeccapurple'))->toBeGreaterThan(strpos($css, '.db-card'));
+});
+
+it('carries a design\'s CSS into the sheet exactly once', function (): void {
+    $sheet = SheetSetup::grid(61, 54, columns: 2, rows: 2);
+    $html = (new CardPreset($sheet))->renderSheet(['A', 'B', 'C'], $sheet->page, ['card_css' => '.badge { color: red; }']);
+
+    // Ein Stilblock je Karte waere bei zweihundert Schildern zweihundertmal
+    // im PDF.
+    expect(substr_count($html, '.badge { color: red; }'))->toBe(1);
+});

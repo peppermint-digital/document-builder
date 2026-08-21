@@ -73,7 +73,7 @@ final class CardPreset implements DocumentPreset
         // Flat CSS only: DomPDF runs with `default_media_type = screen`, so
         // `@media print` never applies, and it supports neither flexbox nor
         // grid. The grid here is absolute positioning in millimetres.
-        return <<<CSS
+        $skelett = <<<CSS
         @page {
             size: {$page->paper} {$page->orientation};
             margin: {$page->marginTop}mm {$page->marginRight}mm {$page->marginBottom}mm {$page->marginLeft}mm;
@@ -128,6 +128,19 @@ final class CardPreset implements DocumentPreset
             width: {$this->markeLaenge()}mm;
         }
         CSS;
+
+        // Das Aussehen eines Entwurfs — Farben, Rahmen, Abstaende — kommt vom
+        // Aufrufer und wird EINMAL je Bogen angehaengt, nicht je Karte. Ein
+        // Stilblock im Kartenrumpf waere bei zweihundert Namensschildern
+        // zweihundertmal im PDF.
+        //
+        // Nach dem Skelett, damit ein Entwurf gezielt ueberschreiben kann,
+        // was er anders braucht.
+        $eigen = $options['card_css'] ?? null;
+
+        return is_string($eigen) && trim($eigen) !== ''
+            ? $skelett."\n".$eigen
+            : $skelett;
     }
 
     /**
