@@ -2,6 +2,7 @@
 
 namespace Peppermint\DocumentBuilder\Data;
 
+use Peppermint\DocumentBuilder\Contracts\DocumentPayload;
 use Peppermint\DocumentBuilder\Services\LineItemsRenderer;
 use Peppermint\DocumentBuilder\Services\PlaceholderRenderer;
 
@@ -13,7 +14,7 @@ use Peppermint\DocumentBuilder\Services\PlaceholderRenderer;
  * renderer and template works without knowing anything about that host. This
  * is what makes a second consumer cheap.
  */
-class DocumentData
+class DocumentData implements DocumentPayload
 {
     /**
      * @param  list<LineItem>  $lineItems
@@ -66,6 +67,15 @@ class DocumentData
      *
      * @return array<string, string|null>
      */
+    /**
+     * The kind of document. Mirrors the readonly property; the contract asks
+     * for a method because a payload may well compute it.
+     */
+    public function type(): string
+    {
+        return $this->type;
+    }
+
     public function placeholders(): array
     {
         $flat = [

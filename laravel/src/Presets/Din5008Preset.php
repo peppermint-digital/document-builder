@@ -2,6 +2,8 @@
 
 namespace Peppermint\DocumentBuilder\Presets;
 
+use InvalidArgumentException;
+use Peppermint\DocumentBuilder\Contracts\DocumentPayload;
 use Peppermint\DocumentBuilder\Contracts\DocumentPreset;
 use Peppermint\DocumentBuilder\Data\DocumentData;
 use Peppermint\DocumentBuilder\Data\PageSetup;
@@ -264,8 +266,26 @@ class Din5008Preset implements DocumentPreset
         CSS;
     }
 
-    public function render(DocumentData $data, string $body, PageSetup $page, array $options = []): string
+    public function render(DocumentPayload $data, string $body, PageSetup $page, array $options = []): string
     {
+        // Der Vertrag sichert nur den gemeinsamen Teil zu — Art und
+        // Platzhalter. Dieses Skelett braucht mehr: Anschriftenfeld,
+        // Infoblock und Fusszeile lesen Absender, Empfaenger und Meta.
+        //
+        // Die Pruefung steht hier und nicht als schmalerer Parameter, weil
+        // PHP keine Generics hat: der Vertrag muss fuer alle Presets
+        // dieselbe Signatur tragen. Wer ihn mit der falschen Form aufruft,
+        // soll das sofort und benannt erfahren — nicht spaeter durch ein
+        // leeres Anschriftenfeld im gedruckten Brief.
+        if (! $data instanceof DocumentData) {
+            throw new InvalidArgumentException(sprintf(
+                '%s needs %s, got %s.',
+                self::class,
+                DocumentData::class,
+                $data::class,
+            ));
+        }
+
         $lang = $this->escape((string) ($options['lang'] ?? 'de'));
 
         $parts = [

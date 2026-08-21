@@ -2,7 +2,6 @@
 
 namespace Peppermint\DocumentBuilder\Contracts;
 
-use Peppermint\DocumentBuilder\Data\DocumentData;
 use Peppermint\DocumentBuilder\Data\PageSetup;
 
 /**
@@ -35,5 +34,5 @@ interface DocumentPreset
      *
      * @param  array<string, mixed>  $options
      */
-    public function render(DocumentData $data, string $body, PageSetup $page, array $options = []): string;
+    public function render(DocumentPayload $data, string $body, PageSetup $page, array $options = []): string;
 }
