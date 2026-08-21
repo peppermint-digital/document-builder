@@ -18,7 +18,14 @@ final class CardCode
 
     public const CODE128 = 'code128';
 
-    public const ARTEN = [self::QR, self::CODE128];
+    public const CODE39 = 'code39';
+
+    public const EAN13 = 'ean13';
+
+    public const ARTEN = [self::QR, self::CODE128, self::CODE39, self::EAN13];
+
+    /** The linear kinds — height is given, width follows from the content. */
+    public const STRICHCODES = [self::CODE128, self::CODE39, self::EAN13];
 
     /**
      * @param  string  $value  What a scanner should read — usually an opaque token, not a name.
@@ -45,6 +52,12 @@ final class CardCode
         if ($size <= 0) {
             throw new InvalidArgumentException('A code needs a size greater than zero.');
         }
+    }
+
+    /** Whether this is a linear code rather than a square one. */
+    public function istStrichcode(): bool
+    {
+        return in_array($this->kind, self::STRICHCODES, true);
     }
 
     /**

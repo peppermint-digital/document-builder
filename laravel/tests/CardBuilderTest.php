@@ -136,3 +136,60 @@ it('spreads a stack of cards across as many sheets as it needs', function (): vo
         ->and(substr_count($html, 'class="db-card"'))->toBe(7)
         ->and($html)->toContain('Person 7');
 });
+
+it('prints one code per workshop on the same card', function (): void {
+    $sheet = SheetSetup::single(76, 124);
+
+    // Das ist der Fall, der in Peppermint Connect eine eigene Vorlage
+    // erzwungen hat: ein Namensschild mit einem QR je Workshop. Mit nur einem
+    // Platzhalter muesste die Vorlage dafuer wieder aufgeteilt werden.
+    $karte = new CardData(
+        type: 'badge',
+        title: 'Anna Ahlers',
+        code: new CardCode('tok_person'),
+        codes: [
+            'ws1' => new CardCode('tok_ws1', size: 12),
+            'ws2' => new CardCode('tok_ws2', size: 12),
+        ],
+    );
+
+    $html = kartenBauer(new BundledCodeRenderer)->html(
+        [$karte],
+        '<div>{{ code_image }}</div><div>{{ code_image.ws1 }}{{ code_image.ws2 }}</div>',
+        $sheet,
+    );
+
+    expect(substr_count($html, '<img'))->toBe(3)
+        ->and(substr_count($html, 'width: 12mm'))->toBe(2);
+});
+
+it('leaves a named code the card does not have as nothing', function (): void {
+    $sheet = SheetSetup::single(76, 124);
+    $html = kartenBauer(new BundledCodeRenderer)
+        ->html([anna(new CardCode('tok_abc'))], '<div>[{{ code_image.ws9 }}]</div>', $sheet);
+
+    expect($html)->toContain('[]');
+});
+
+it('gives each linear kind its height and no forced width', function (): void {
+    $sheet = SheetSetup::single(76, 124);
+
+    foreach ([CardCode::CODE128 => 'ABC123', CardCode::CODE39 => 'abc123', CardCode::EAN13 => '4006381333931'] as $art => $wert) {
+        $html = kartenBauer(new BundledCodeRenderer)
+            ->html([anna(new CardCode($wert, kind: $art, size: 14))], '<div>{{ code_image }}</div>', $sheet);
+
+        expect($html)->toContain('height: 14mm')
+            ->and($html)->not->toContain('width: 14mm');
+    }
+});
+
+it('shapes the value to what the kind can encode', function (): void {
+    // CODE39 kennt keine Kleinbuchstaben, EAN-13 sind genau zwoelf Ziffern.
+    // Roh uebergeben wirft die Bibliothek tief innen, mit einer Meldung ueber
+    // die Bibliothek statt ueber das Namensschild.
+    $renderer = new BundledCodeRenderer;
+
+    expect($renderer->dataUri(new CardCode('abc123', kind: CardCode::CODE39)))->toStartWith('data:image/png;base64,')
+        ->and($renderer->dataUri(new CardCode('40-06381-333931', kind: CardCode::EAN13)))->toStartWith('data:image/png;base64,')
+        ->and($renderer->dataUri(new CardCode('kurz', kind: CardCode::EAN13)))->toStartWith('data:image/png;base64,');
+});

@@ -29,11 +29,11 @@ final class BundledCodeRenderer implements CodeRenderer
 
     public function supports(CardCode $code): bool
     {
-        return match ($code->kind) {
-            CardCode::QR => class_exists(QrCode::class),
-            CardCode::CODE128 => class_exists(BarcodeGeneratorPNG::class),
-            default => false,
-        };
+        if ($code->kind === CardCode::QR) {
+            return class_exists(QrCode::class);
+        }
+
+        return $code->istStrichcode() && class_exists(BarcodeGeneratorPNG::class);
     }
 
     public function dataUri(CardCode $code): string
@@ -42,15 +42,13 @@ final class BundledCodeRenderer implements CodeRenderer
             throw new RuntimeException(sprintf(
                 'No driver for code kind "%s". Install %s.',
                 $code->kind,
-                $code->kind === CardCode::CODE128 ? 'picqer/php-barcode-generator' : 'endroid/qr-code',
+                $code->istStrichcode() ? 'picqer/php-barcode-generator' : 'endroid/qr-code',
             ));
         }
 
-        return match ($code->kind) {
-            CardCode::QR => $this->qr($code),
-            CardCode::CODE128 => $this->code128($code),
-            default => throw new RuntimeException('Unreachable: supports() already covered this.'),
-        };
+        return $code->kind === CardCode::QR
+            ? $this->qr($code)
+            : $this->strichcode($code);
     }
 
     private function qr(CardCode $code): string
@@ -69,17 +67,43 @@ final class BundledCodeRenderer implements CodeRenderer
         return (new PngWriter)->write($qr)->getDataUri();
     }
 
-    private function code128(CardCode $code): string
+    private function strichcode(CardCode $code): string
     {
-        // `size` is the bar height for a linear code; the width follows from
-        // the content and must not be squeezed, or scanners lose it.
+        // `size` is the bar height; the width follows from the content and
+        // must not be squeezed, or scanners lose it.
         $png = (new BarcodeGeneratorPNG)->getBarcode(
-            $code->value,
-            BarcodeGeneratorPNG::TYPE_CODE_128,
+            $this->inhaltFuer($code),
+            match ($code->kind) {
+                CardCode::CODE39 => BarcodeGeneratorPNG::TYPE_CODE_39,
+                CardCode::EAN13 => BarcodeGeneratorPNG::TYPE_EAN_13,
+                default => BarcodeGeneratorPNG::TYPE_CODE_128,
+            },
             2,
             (int) round($code->size * self::PIXEL_JE_MM),
         );
 
         return 'data:image/png;base64,'.base64_encode($png);
+    }
+
+    /**
+     * The value in the form the chosen kind can actually encode.
+     *
+     * CODE39 has no lower case, and EAN-13 is exactly twelve digits plus a
+     * check digit the generator adds. Handing either the raw value throws deep
+     * inside the library with a message about the library, not about the badge
+     * — so the shaping happens here, where the reason is visible.
+     */
+    private function inhaltFuer(CardCode $code): string
+    {
+        return match ($code->kind) {
+            CardCode::CODE39 => strtoupper($code->value),
+            CardCode::EAN13 => str_pad(
+                substr(preg_replace('/\D/', '', $code->value) ?? '', 0, 12),
+                12,
+                '0',
+                STR_PAD_LEFT,
+            ),
+            default => $code->value,
+        };
     }
 }

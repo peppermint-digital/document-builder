@@ -22,9 +22,6 @@ use Peppermint\DocumentBuilder\Services\PlaceholderRenderer;
  */
 class CardBuilder
 {
-    /** The token that expands to the code image rather than to a value. */
-    private const BLOCK_CODE = "\0db:code\0";
-
     public function __construct(
         private readonly DocumentRenderer $renderer,
         private readonly PlaceholderRenderer $placeholders,
@@ -88,11 +85,28 @@ class CardBuilder
         // substitution — and it must be filled in afterwards, or a card whose
         // own text happens to contain "{{ code_image }}" would grow a second
         // code.
-        $body = (string) preg_replace('/\{\{\s*code_image\s*\}\}/', self::BLOCK_CODE, $body);
+        $marken = [];
+
+        // Der Hauptcode und jeder benannte Zusatzcode bekommen eine eigene
+        // Marke. Ein Namensschild mit QR je Workshop braucht mehrere Bilder
+        // auf derselben Karte — mit nur einem Platzhalter muesste die Vorlage
+        // dafuer wieder aufgeteilt werden, und genau davon kommen wir her.
+        $body = (string) preg_replace_callback(
+            '/\{\{\s*code_image(?:\.([^}\s]+))?\s*\}\}/',
+            function (array $treffer) use ($card, &$marken): string {
+                $schluessel = $treffer[1] ?? null;
+                $code = $schluessel === null ? $card->code : ($card->codes[$schluessel] ?? null);
+                $marke = "\0db:code:".count($marken)."\0";
+                $marken[$marke] = $this->codeBild($code);
+
+                return $marke;
+            },
+            $body,
+        );
 
         $body = $this->placeholders->renderHtml($body, $card->placeholders());
 
-        return str_replace(self::BLOCK_CODE, $this->codeBild($card), $body);
+        return strtr($body, $marken);
     }
 
     /**
@@ -102,22 +116,22 @@ class CardBuilder
      * image. An empty box would look like a code that failed to scan — worse
      * than an honest gap, because someone would try to scan it.
      */
-    private function codeBild(CardData $card): string
+    private function codeBild(?CardCode $code): string
     {
-        if ($card->code === null || $this->codes === null || ! $this->codes->supports($card->code)) {
+        if ($code === null || $this->codes === null || ! $this->codes->supports($code)) {
             return '';
         }
 
         // A QR code is square. A linear barcode is not: `size` is its height,
         // and its width follows from the content. Forcing that one square
         // squeezes the bars until a scanner loses them.
-        $masse = $card->code->kind === CardCode::CODE128
-            ? sprintf('height: %smm;', $card->code->size)
-            : sprintf('width: %smm; height: %smm;', $card->code->size, $card->code->size);
+        $masse = $code->istStrichcode()
+            ? sprintf('height: %smm;', $code->size)
+            : sprintf('width: %smm; height: %smm;', $code->size, $code->size);
 
         return sprintf(
             '<img src="%s" alt="" style="%s">',
-            $this->codes->dataUri($card->code),
+            $this->codes->dataUri($code),
             $masse,
         );
     }
