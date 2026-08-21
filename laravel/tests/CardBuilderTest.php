@@ -193,3 +193,58 @@ it('shapes the value to what the kind can encode', function (): void {
         ->and($renderer->dataUri(new CardCode('40-06381-333931', kind: CardCode::EAN13)))->toStartWith('data:image/png;base64,')
         ->and($renderer->dataUri(new CardCode('kurz', kind: CardCode::EAN13)))->toStartWith('data:image/png;base64,');
 });
+
+it('renders the supporting lines as a block', function (): void {
+    $sheet = SheetSetup::single(76, 124);
+    $karte = new CardData(
+        type: 'badge',
+        title: 'Anna Ahlers',
+        rows: ['Rolle' => 'Referentin', 'Tisch' => '12', 'Leer' => ''],
+    );
+
+    $html = kartenBauer()->html([$karte], '<div>{{ rows }}</div>', $sheet);
+
+    // Ohne den Block muesste eine Vorlage jedes moegliche Feld einzeln nennen,
+    // und jedes neue Feld waere eine Vorlagenaenderung.
+    expect(substr_count($html, 'db-card-row"'))->toBe(2)
+        ->and($html)->toContain('Referentin')
+        ->and($html)->toContain('Tisch')
+        ->and($html)->not->toContain('Leer');
+});
+
+it('pairs a line with its own code', function (): void {
+    $sheet = SheetSetup::single(76, 124);
+    $karte = new CardData(
+        type: 'badge',
+        title: 'Anna Ahlers',
+        rows: ['Workshop A' => '10:00', 'Workshop B' => '14:00'],
+        codes: ['Workshop A' => new CardCode('tok_a', size: 10), 'Workshop B' => new CardCode('tok_b', size: 10)],
+    );
+
+    $html = kartenBauer(new BundledCodeRenderer)->html([$karte], '<div>{{ rows }}</div>', $sheet);
+
+    // Zeile und Code reisen zusammen — das ist, was ein QR je Workshop
+    // ermoeglicht, ohne eine Vorlage je Workshop-Anzahl.
+    expect(substr_count($html, '<img'))->toBe(2)
+        ->and($html)->toContain('Workshop A');
+});
+
+it('escapes what goes into a line', function (): void {
+    $sheet = SheetSetup::single(76, 124);
+    $karte = new CardData(type: 'badge', title: 'X', rows: ['Rolle' => '<script>alert(1)</script>']);
+
+    $html = kartenBauer()->html([$karte], '<div>{{ rows }}</div>', $sheet);
+
+    expect($html)->not->toContain('<script>')
+        ->and($html)->toContain('&lt;script&gt;');
+});
+
+it('embeds a named image and skips one it does not have', function (): void {
+    $sheet = SheetSetup::single(76, 124);
+    $karte = new CardData(type: 'badge', title: 'X', images: ['logo' => 'data:image/png;base64,AAAA']);
+
+    $html = kartenBauer()->html([$karte], '<div>{{ image.logo }}[{{ image.fehlt }}]</div>', $sheet);
+
+    expect(substr_count($html, '<img'))->toBe(1)
+        ->and($html)->toContain('[]');
+});

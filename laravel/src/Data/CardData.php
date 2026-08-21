@@ -31,6 +31,7 @@ final class CardData implements DocumentPayload
         public readonly array $rows = [],
         public readonly ?CardCode $code = null,
         public readonly array $codes = [],
+        public readonly array $images = [],
         public readonly array $meta = [],
         public readonly array $custom = [],
     ) {}
@@ -59,6 +60,7 @@ final class CardData implements DocumentPayload
                 CardCode::fromArray(...),
                 array_filter((array) ($attributes['codes'] ?? []), is_array(...)),
             ),
+            images: array_map(strval(...), (array) ($attributes['images'] ?? [])),
             meta: $meta,
             custom: $custom,
         );

@@ -71,7 +71,7 @@ class CardBuilder
     {
         return array_values(array_diff(
             $this->placeholders->missingPlaceholders($body, $card->placeholders()),
-            ['code_image'],
+            ['code_image', 'rows'],
         ));
     }
 
@@ -104,9 +104,72 @@ class CardBuilder
             $body,
         );
 
+        // Bilder — dieselbe Mechanik wie beim Code, aus demselben Grund: sie
+        // werden zu Markup und muessen die Platzhalter-Ersetzung ueberleben,
+        // die alle Werte escapet.
+        $body = (string) preg_replace_callback(
+            '/\{\{\s*image\.([^}\s]+)\s*\}\}/',
+            function (array $treffer) use ($card, &$marken): string {
+                $marke = "\0db:img:".count($marken)."\0";
+                $marken[$marke] = $this->bild($card->images[$treffer[1]] ?? null);
+
+                return $marke;
+            },
+            $body,
+        );
+
+        // Der Zeilenblock. Ohne ihn muesste eine Vorlage jedes moegliche Feld
+        // einzeln nennen — und jedes neue Feld waere eine Vorlagenaenderung.
+        if (str_contains($body, '{{ rows }}') || preg_match('/\{\{\s*rows\s*\}\}/', $body) === 1) {
+            $marke = "\0db:rows\0";
+            $marken[$marke] = $this->zeilenBlock($card);
+            $body = (string) preg_replace('/\{\{\s*rows\s*\}\}/', $marke, $body);
+        }
+
         $body = $this->placeholders->renderHtml($body, $card->placeholders());
 
         return strtr($body, $marken);
+    }
+
+    /**
+     * The supporting lines as markup, each with its own code where the card
+     * has one under the same key.
+     *
+     * That pairing is what lets a badge print one QR per workshop without a
+     * template per workshop count: the row and its code travel together.
+     */
+    private function zeilenBlock(CardData $card): string
+    {
+        $html = '';
+
+        foreach ($card->gefuellteZeilen() as $label => $wert) {
+            $code = $card->codes[$label] ?? null;
+
+            $html .= sprintf(
+                '<div class="db-card-row"><span class="db-card-row-label">%s</span> <span class="db-card-row-value">%s</span>%s</div>',
+                htmlspecialchars((string) $label, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'),
+                htmlspecialchars($wert, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'),
+                $this->codeBild($code),
+            );
+        }
+
+        return $html;
+    }
+
+    /**
+     * An image, or nothing. Same rule as for codes: a missing source prints no
+     * element rather than a broken one.
+     */
+    private function bild(?string $quelle): string
+    {
+        if ($quelle === null || trim($quelle) === '') {
+            return '';
+        }
+
+        return sprintf(
+            '<img src="%s" alt="" class="db-card-image">',
+            htmlspecialchars($quelle, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'),
+        );
     }
 
     /**
