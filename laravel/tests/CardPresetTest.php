@@ -114,3 +114,12 @@ it('carries a design\'s CSS into the sheet exactly once', function (): void {
     // im PDF.
     expect(substr_count($html, '.badge { color: red; }'))->toBe(1);
 });
+
+it('keeps a card exactly its size even when a design adds a border', function (): void {
+    $sheet = SheetSetup::grid(61, 54, columns: 2, rows: 2);
+    $css = (new CardPreset($sheet))->css($sheet->page);
+
+    // Ohne das laeuft ein Rahmen ueber die Kante und `overflow: hidden`
+    // schneidet ihn ab — sichtbar als fehlende Linie an einer Seite.
+    expect($css)->toContain('box-sizing: border-box');
+});

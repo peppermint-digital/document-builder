@@ -97,6 +97,12 @@ final class CardPreset implements DocumentPreset
 
         .db-card {
             position: absolute;
+
+            /* Damit ein Entwurf die Karte selbst rahmen und polstern kann,
+               ohne dass sie dadurch groesser wird als ihr Platz im Raster.
+               Ohne das lief der Rahmen ueber die Kante und `overflow: hidden`
+               schnitt ihn ab — sichtbar als fehlende Linie an einer Seite. */
+            box-sizing: border-box;
             width: {$this->sheet->cardWidth}mm;
             height: {$this->sheet->cardHeight}mm;
             overflow: hidden;
