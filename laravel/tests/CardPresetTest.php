@@ -164,3 +164,24 @@ it('scales the padding with the card, so one template serves both sizes', functi
 
     expect((float) $a[1])->toBeGreaterThan((float) $b[1]);
 });
+
+it('lets a design override the derived type size', function (): void {
+    $sheet = SheetSetup::single(130, 185);
+    $preset = new CardPreset($sheet);
+
+    // Die Formel ist an Namensschildern geeicht. Eine deutlich groessere Karte
+    // bekaeme daraus eine Schrift, die massstaeblich stimmt und trotzdem zu
+    // viel Platz frisst — auf der Eintrittskarte fielen QR und Fusszeile
+    // heraus.
+    expect($preset->basisSchriftgroesse())->toBeGreaterThan(14.0)
+        ->and($preset->basisSchriftgroesse(['card_font_pt' => 9]))->toBe(9.0)
+        ->and($preset->css($sheet->page, ['card_font_pt' => 9]))->toContain('font-size: 9pt');
+});
+
+it('ignores a nonsense type size and keeps the derivation', function (): void {
+    $sheet = SheetSetup::single(76, 124);
+    $preset = new CardPreset($sheet);
+
+    expect($preset->basisSchriftgroesse(['card_font_pt' => 0]))->toBe($preset->basisSchriftgroesse())
+        ->and($preset->basisSchriftgroesse(['card_font_pt' => 'gross']))->toBe($preset->basisSchriftgroesse());
+});

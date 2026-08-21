@@ -58,8 +58,19 @@ final class CardPreset implements DocumentPreset
     /**
      * The base font size for this sheet's cards, in points.
      */
-    public function basisSchriftgroesse(): float
+    public function basisSchriftgroesse(array $options = []): float
     {
+        // Ein Entwurf darf die Ableitung ueberschreiben. Die Formel ist an
+        // Namensschildern geeicht (54–124mm); eine deutlich groessere Karte —
+        // eine Eintrittskarte etwa — bekaeme daraus eine Schrift, die zwar
+        // massstaeblich stimmt, aber zu viel Platz frisst. Wer es besser weiss,
+        // sagt es; die Ableitung bleibt der Normalfall.
+        $vorgegeben = $options['card_font_pt'] ?? null;
+
+        if (is_numeric($vorgegeben) && (float) $vorgegeben > 0) {
+            return round((float) $vorgegeben, 1);
+        }
+
         return round(sqrt($this->sheet->cardHeight) * self::SCHRIFT_FAKTOR, 1);
     }
 
@@ -68,7 +79,7 @@ final class CardPreset implements DocumentPreset
      */
     public function css(PageSetup $page, array $options = []): string
     {
-        $basis = $this->basisSchriftgroesse();
+        $basis = $this->basisSchriftgroesse($options);
         $polster = $this->polster($options);
         $rahmen = $this->rahmenstaerke($options);
 
@@ -184,7 +195,7 @@ final class CardPreset implements DocumentPreset
         $em = (float) ($options['card_padding_em'] ?? 0.0);
 
         // 1pt = 0.352778mm.
-        return round($em * $this->basisSchriftgroesse() * 0.352778, 2);
+        return round($em * $this->basisSchriftgroesse($options) * 0.352778, 2);
     }
 
     /**
