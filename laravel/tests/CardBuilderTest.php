@@ -248,3 +248,126 @@ it('embeds a named image and skips one it does not have', function (): void {
     expect(substr_count($html, '<img'))->toBe(1)
         ->and($html)->toContain('[]');
 });
+
+it('renders only the named group, and nothing when it is empty', function (): void {
+    $sheet = SheetSetup::single(76, 124);
+    $karte = new CardData(
+        type: 'badge',
+        title: 'Anna Ahlers',
+        rows: [
+            'felder' => ['Rolle' => 'Referentin'],
+            'workshops' => ['Testing' => '10:00'],
+        ],
+    );
+
+    $vorlage = '<div>{{ rows.felder }}</div><div>[<h3>Gebuchte Workshops:</h3>{{ rows.workshops }}]</div>'
+        .'<div>({{ rows.gibtesnicht }})</div>';
+
+    $html = kartenBauer()->html([$karte], $vorlage, $sheet);
+
+    expect($html)->toContain('Referentin')
+        ->and($html)->toContain('Testing')
+        // Die leere Gruppe druckt nichts — die Klammern bleiben leer.
+        ->and($html)->toContain('()');
+});
+
+it('prints a group heading only when that group has lines', function (): void {
+    $sheet = SheetSetup::single(76, 124);
+    $vorlage = '{{ rows.felder }}{{ rows.workshops }}';
+    $titel = ['workshops' => 'Gebuchte Workshops:'];
+
+    $mit = new CardData(
+        type: 'badge',
+        title: 'Anna',
+        rows: ['felder' => ['Rolle' => 'Referentin'], 'workshops' => ['Testing' => '10:00']],
+        gruppentitel: $titel,
+    );
+
+    $ohne = new CardData(
+        type: 'badge',
+        title: 'Anna',
+        rows: ['felder' => ['Rolle' => 'Referentin'], 'workshops' => []],
+        gruppentitel: $titel,
+    );
+
+    // Genau der Fall vom Namensschild. Die Ueberschrift gehoert IN den Block:
+    // daneben in der Vorlage stuende sie auch ohne gebuchten Workshop da, und
+    // eine blosse Bedingung auf „gibt es Zeilen?" haette es nicht geloest —
+    // die Zusatzfelder sind ja vorhanden.
+    expect(kartenBauer()->html([$mit], $vorlage, $sheet))->toContain('Gebuchte Workshops:')
+        ->and(kartenBauer()->html([$ohne], $vorlage, $sheet))->not->toContain('Gebuchte Workshops:')
+        // Die Zusatzfelder bleiben in beiden Faellen.
+        ->and(kartenBauer()->html([$ohne], $vorlage, $sheet))->toContain('Referentin');
+});
+
+it('escapes a group heading', function (): void {
+    $sheet = SheetSetup::single(76, 124);
+    $karte = new CardData(
+        type: 'badge',
+        title: 'Anna',
+        rows: ['g' => ['A' => '1']],
+        gruppentitel: ['g' => '<script>alert(1)</script>'],
+    );
+
+    expect(kartenBauer()->html([$karte], '{{ rows.g }}', $sheet))
+        ->not->toContain('<script>')
+        ->toContain('&lt;script&gt;');
+});
+
+it('keeps flat rows working exactly as before', function (): void {
+    $sheet = SheetSetup::single(76, 124);
+    $karte = new CardData(type: 'badge', title: 'Anna', rows: ['Rolle' => 'Referentin', 'Leer' => '']);
+
+    $html = kartenBauer()->html([$karte], '<div>{{ rows }}</div>', $sheet);
+
+    // Vorlagen, die vor den Gruppen geschrieben wurden, duerfen nicht brechen.
+    expect(substr_count($html, 'db-card-row"'))->toBe(1)
+        ->and($html)->toContain('Referentin');
+});
+
+it('takes every group when no name is given', function (): void {
+    $sheet = SheetSetup::single(76, 124);
+    $karte = new CardData(
+        type: 'badge',
+        title: 'Anna',
+        rows: ['felder' => ['Rolle' => 'Referentin'], 'workshops' => ['Testing' => '10:00']],
+    );
+
+    $html = kartenBauer()->html([$karte], '<div>{{ rows }}</div>', $sheet);
+
+    expect(substr_count($html, 'db-card-row"'))->toBe(2);
+});
+
+it('reaches a grouped line by its label as a placeholder', function (): void {
+    $sheet = SheetSetup::single(76, 124);
+    $karte = new CardData(type: 'badge', title: 'Anna', rows: ['felder' => ['Rolle' => 'Referentin']]);
+
+    expect(kartenBauer()->html([$karte], '<p>{{ row.Rolle }}</p>', $sheet))->toContain('Referentin');
+});
+
+it('pairs a grouped line with its code', function (): void {
+    $sheet = SheetSetup::single(76, 124);
+    $karte = new CardData(
+        type: 'badge',
+        title: 'Anna',
+        rows: ['workshops' => ['Workshop A' => '10:00']],
+        codes: ['Workshop A' => new CardCode('tok_a', size: 10)],
+    );
+
+    $html = kartenBauer(new BundledCodeRenderer)->html([$karte], '<div>{{ rows.workshops }}</div>', $sheet);
+
+    expect(substr_count($html, '<img'))->toBe(1);
+});
+
+it('puts flat rows in the default group, where a template can address them', function (): void {
+    $sheet = SheetSetup::single(76, 124);
+    $karte = new CardData(type: 'badge', title: 'Anna', rows: ['Rolle' => 'Referentin']);
+
+    // `GRUPPE_VORGABE` ist oeffentlich und damit ein Versprechen: wer flach
+    // uebergibt, erreicht seine Zeilen unter diesem Namen. Ohne diese
+    // Behauptung waere die Konstante nur Dekoration — `{{ rows }}` ist der
+    // Gruppenname egal.
+    $html = kartenBauer()->html([$karte], '<div>[{{ rows.'.CardData::GRUPPE_VORGABE.' }}]</div>', $sheet);
+
+    expect($html)->toContain('Referentin');
+});

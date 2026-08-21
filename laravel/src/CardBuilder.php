@@ -118,13 +118,23 @@ class CardBuilder
             $body,
         );
 
-        // Der Zeilenblock. Ohne ihn muesste eine Vorlage jedes moegliche Feld
-        // einzeln nennen — und jedes neue Feld waere eine Vorlagenaenderung.
-        if (str_contains($body, '{{ rows }}') || preg_match('/\{\{\s*rows\s*\}\}/', $body) === 1) {
-            $marke = "\0db:rows\0";
-            $marken[$marke] = $this->zeilenBlock($card);
-            $body = (string) preg_replace('/\{\{\s*rows\s*\}\}/', $marke, $body);
-        }
+        // Der Zeilenblock, wahlweise fuer eine benannte Gruppe. Ohne ihn
+        // muesste eine Vorlage jedes moegliche Feld einzeln nennen — und jedes
+        // neue Feld waere eine Vorlagenaenderung.
+        //
+        // `{{ rows }}` nimmt alles, `{{ rows.workshops }}` genau eine Gruppe.
+        // Eine leere Gruppe druckt nichts; damit verschwindet auch eine
+        // Ueberschrift, die in der Vorlage bei ihr steht.
+        $body = (string) preg_replace_callback(
+            '/\{\{\s*rows(?:\.([^}\s]+))?\s*\}\}/',
+            function (array $treffer) use ($card, &$marken): string {
+                $marke = "\0db:rows:".count($marken)."\0";
+                $marken[$marke] = $this->zeilenBlock($card, $treffer[1] ?? null);
+
+                return $marke;
+            },
+            $body,
+        );
 
         $body = $this->placeholders->renderHtml($body, $card->placeholders());
 
@@ -137,12 +147,32 @@ class CardBuilder
      *
      * That pairing is what lets a badge print one QR per workshop without a
      * template per workshop count: the row and its code travel together.
+     *
+     * With a group name, only that group is rendered — and nothing at all if
+     * it is empty, which is how a heading placed beside it disappears with it.
      */
-    private function zeilenBlock(CardData $card): string
+    private function zeilenBlock(CardData $card, ?string $gruppe = null): string
     {
-        $html = '';
+        $zeilen = $gruppe === null
+            ? $card->gefuellteZeilen()
+            : ($card->gefuellteGruppen()[$gruppe] ?? []);
 
-        foreach ($card->gefuellteZeilen() as $label => $wert) {
+        if ($zeilen === []) {
+            return '';
+        }
+
+        // Die Ueberschrift gehoert IN den Block, nicht daneben in die Vorlage.
+        // Daneben stuende sie auch dann da, wenn niemand einen Workshop
+        // gebucht hat — und eine blosse Bedingung auf „gibt es Zeilen?" haette
+        // das nicht loesen koennen, weil die Zusatzfelder ja da sind.
+        $html = $gruppe !== null && isset($card->gruppentitel[$gruppe])
+            ? sprintf(
+                '<div class="db-card-rows-title">%s</div>',
+                htmlspecialchars($card->gruppentitel[$gruppe], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'),
+            )
+            : '';
+
+        foreach ($zeilen as $label => $wert) {
             $code = $card->codes[$label] ?? null;
 
             $html .= sprintf(

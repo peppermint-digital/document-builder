@@ -19,6 +19,9 @@ use Peppermint\DocumentBuilder\Contracts\DocumentPayload;
  */
 final class CardData implements DocumentPayload
 {
+    /** Where flat rows land, so templates written before groups keep working. */
+    public const GRUPPE_VORGABE = 'default';
+
     /**
      * @param  array<string, string|null>  $rows  Supporting lines, label => value.
      * @param  array<string, string|null>  $meta  Not for printing: sorting, grouping, filenames.
@@ -32,6 +35,7 @@ final class CardData implements DocumentPayload
         public readonly ?CardCode $code = null,
         public readonly array $codes = [],
         public readonly array $images = [],
+        public readonly array $gruppentitel = [],
         public readonly array $meta = [],
         public readonly array $custom = [],
     ) {}
@@ -61,6 +65,7 @@ final class CardData implements DocumentPayload
                 array_filter((array) ($attributes['codes'] ?? []), is_array(...)),
             ),
             images: array_map(strval(...), (array) ($attributes['images'] ?? [])),
+            gruppentitel: array_map(strval(...), (array) ($attributes['group_titles'] ?? [])),
             meta: $meta,
             custom: $custom,
         );
@@ -91,8 +96,10 @@ final class CardData implements DocumentPayload
             'code' => $this->code?->value,
         ];
 
-        foreach ($this->rows as $label => $wert) {
-            $werte['row.'.$label] = $wert === null ? null : (string) $wert;
+        foreach ($this->gefuellteGruppen() as $zeilen) {
+            foreach ($zeilen as $label => $wert) {
+                $werte['row.'.$label] = $wert;
+            }
         }
 
         foreach ($this->custom as $schluessel => $wert) {
@@ -103,7 +110,44 @@ final class CardData implements DocumentPayload
     }
 
     /**
-     * The supporting lines that actually carry something.
+     * The supporting lines that actually carry something, by group.
+     *
+     * Rows may be given flat — `['Rolle' => 'Referentin']` — or grouped —
+     * `['felder' => [...], 'workshops' => [...]]`. Flat rows land in the
+     * default group, so nothing that was written before this existed changes.
+     *
+     * Groups exist because a template needs to tell one KIND of line from
+     * another. A conditional could only ask "are there any lines?"; a badge
+     * needs to ask "are there any workshops?", because the heading
+     * „Gebuchte Workshops:" belongs over those and over nothing else.
+     *
+     * @return array<string, array<string, string>>
+     */
+    public function gefuellteGruppen(): array
+    {
+        $gruppen = [];
+
+        foreach ($this->rows as $schluessel => $wert) {
+            if (is_array($wert)) {
+                $gefuellt = $this->nurGefuellte($wert);
+
+                if ($gefuellt !== []) {
+                    $gruppen[(string) $schluessel] = $gefuellt;
+                }
+
+                continue;
+            }
+
+            if (trim((string) $wert) !== '') {
+                $gruppen[self::GRUPPE_VORGABE][(string) $schluessel] = (string) $wert;
+            }
+        }
+
+        return $gruppen;
+    }
+
+    /**
+     * All filled lines, regardless of group — what `{{ rows }}` renders.
      *
      * A badge with an empty company line should print a shorter badge, not a
      * gap where the company would have been.
@@ -112,9 +156,24 @@ final class CardData implements DocumentPayload
      */
     public function gefuellteZeilen(): array
     {
+        $alle = [];
+
+        foreach ($this->gefuellteGruppen() as $zeilen) {
+            $alle += $zeilen;
+        }
+
+        return $alle;
+    }
+
+    /**
+     * @param  array<string, string|null>  $zeilen
+     * @return array<string, string>
+     */
+    private function nurGefuellte(array $zeilen): array
+    {
         $gefuellt = [];
 
-        foreach ($this->rows as $label => $wert) {
+        foreach ($zeilen as $label => $wert) {
             if (trim((string) $wert) !== '') {
                 $gefuellt[(string) $label] = (string) $wert;
             }
