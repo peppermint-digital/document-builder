@@ -72,9 +72,16 @@ final class CardPreset implements DocumentPreset
         $polster = $this->polster($options);
         $rahmen = $this->rahmenstaerke($options);
 
-        // Farbe zusammen mit der Staerke, in EINER Deklaration. Getrennt —
-        // Staerke hier, Farbe im Entwurf — fuehrt DomPDF die Kurz- und die
-        // Langschreibweise nicht zusammen, und der Rahmen bleibt unsichtbar.
+        // Farbe zusammen mit der Staerke, in EINER Deklaration — damit alles,
+        // was das Kartenmass beeinflusst, an einer Stelle steht und ein Entwurf
+        // nicht versehentlich die Staerke mitaendert.
+        //
+        // Anmerkung zur Entstehung: die erste Fassung begruendete das damit,
+        // DomPDF fuehre Kurz- und Langschreibweise nicht zusammen. Das war eine
+        // Vermutung aus einem Fehlversuch, bei dem in Wahrheit die Optionen gar
+        // nicht ankamen — nicht nachgewiesen, und vermutlich falsch. Die
+        // Zusammenlegung bleibt trotzdem, aus dem oben genannten Grund.
+        //
         // Was der Aufrufer hier hineingibt, hat er zu pruefen; es landet
         // ungeprueft im Stylesheet.
         $rahmenfarbe = (string) ($options['card_border_color'] ?? 'transparent');
