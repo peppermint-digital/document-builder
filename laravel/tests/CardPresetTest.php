@@ -132,6 +132,19 @@ it('subtracts padding and border from the card instead of trusting box-sizing', 
         ->and($css)->toContain("padding: {$polster}mm");
 });
 
+it('declares border width and colour together', function (): void {
+    $sheet = SheetSetup::grid(61, 54, columns: 2, rows: 2);
+    $css = (new CardPreset($sheet))->css($sheet->page, [
+        'card_border_mm' => 0.5,
+        'card_border_color' => '#4F46E5',
+    ]);
+
+    // Getrennt — Staerke im Skelett, Farbe im Entwurf — fuehrt DomPDF die
+    // Kurz- und die Langschreibweise nicht zusammen, und der Rahmen bleibt
+    // unsichtbar. Genau so verschwand er auf dem ersten gedruckten Bogen.
+    expect($css)->toContain('border: 0.5mm solid #4F46E5');
+});
+
 it('leaves the card at its full size when a design asks for no padding', function (): void {
     $sheet = SheetSetup::grid(61, 54, columns: 2, rows: 2);
     $css = (new CardPreset($sheet))->css($sheet->page);

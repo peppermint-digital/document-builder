@@ -72,6 +72,13 @@ final class CardPreset implements DocumentPreset
         $polster = $this->polster($options);
         $rahmen = $this->rahmenstaerke($options);
 
+        // Farbe zusammen mit der Staerke, in EINER Deklaration. Getrennt —
+        // Staerke hier, Farbe im Entwurf — fuehrt DomPDF die Kurz- und die
+        // Langschreibweise nicht zusammen, und der Rahmen bleibt unsichtbar.
+        // Was der Aufrufer hier hineingibt, hat er zu pruefen; es landet
+        // ungeprueft im Stylesheet.
+        $rahmenfarbe = (string) ($options['card_border_color'] ?? 'transparent');
+
         // Der Innenraum wird HIER ausgerechnet, nicht von `box-sizing`
         // erledigt: DomPDF setzt `box-sizing: border-box` nicht um. Innenabstand
         // und Rahmen kommen dort oben drauf, statt eingerechnet zu werden — und
@@ -110,9 +117,7 @@ final class CardPreset implements DocumentPreset
             width: {$innenBreite}mm;
             height: {$innenHoehe}mm;
             padding: {$polster}mm;
-            border-width: {$rahmen}mm;
-            border-style: solid;
-            border-color: transparent;
+            border: {$rahmen}mm solid {$rahmenfarbe};
             overflow: hidden;
             font-size: {$basis}pt;
             line-height: 1.35;
