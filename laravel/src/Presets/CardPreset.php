@@ -69,6 +69,16 @@ final class CardPreset implements DocumentPreset
     public function css(PageSetup $page, array $options = []): string
     {
         $basis = $this->basisSchriftgroesse();
+        $polster = $this->polster($options);
+        $rahmen = $this->rahmenstaerke($options);
+
+        // Der Innenraum wird HIER ausgerechnet, nicht von `box-sizing`
+        // erledigt: DomPDF setzt `box-sizing: border-box` nicht um. Innenabstand
+        // und Rahmen kommen dort oben drauf, statt eingerechnet zu werden — und
+        // die Karte wird breiter als ihr Platz im Raster. Sichtbar wird das
+        // erst am Papier: die letzte Spalte stoesst ueber den Rand.
+        $innenBreite = round($this->sheet->cardWidth - 2 * ($polster + $rahmen), 2);
+        $innenHoehe = round($this->sheet->cardHeight - 2 * ($polster + $rahmen), 2);
 
         // Flat CSS only: DomPDF runs with `default_media_type = screen`, so
         // `@media print` never applies, and it supports neither flexbox nor
@@ -97,14 +107,12 @@ final class CardPreset implements DocumentPreset
 
         .db-card {
             position: absolute;
-
-            /* Damit ein Entwurf die Karte selbst rahmen und polstern kann,
-               ohne dass sie dadurch groesser wird als ihr Platz im Raster.
-               Ohne das lief der Rahmen ueber die Kante und `overflow: hidden`
-               schnitt ihn ab — sichtbar als fehlende Linie an einer Seite. */
-            box-sizing: border-box;
-            width: {$this->sheet->cardWidth}mm;
-            height: {$this->sheet->cardHeight}mm;
+            width: {$innenBreite}mm;
+            height: {$innenHoehe}mm;
+            padding: {$polster}mm;
+            border-width: {$rahmen}mm;
+            border-style: solid;
+            border-color: transparent;
             overflow: hidden;
             font-size: {$basis}pt;
             line-height: 1.35;
@@ -147,6 +155,34 @@ final class CardPreset implements DocumentPreset
         return is_string($eigen) && trim($eigen) !== ''
             ? $skelett."\n".$eigen
             : $skelett;
+    }
+
+    /**
+     * Innenabstand der Karte in Millimetern.
+     *
+     * Wird in `em` angegeben, damit er mit der Kartengroesse mitwaechst — und
+     * hier in Millimeter umgerechnet, weil das Preset ihn vom Kartenmass
+     * abziehen muss. Ein Entwurf, der stattdessen selbst `padding` auf
+     * `.db-card` setzt, macht die Karte wieder zu gross.
+     *
+     * @param  array<string, mixed>  $options
+     */
+    private function polster(array $options): float
+    {
+        $em = (float) ($options['card_padding_em'] ?? 0.0);
+
+        // 1pt = 0.352778mm.
+        return round($em * $this->basisSchriftgroesse() * 0.352778, 2);
+    }
+
+    /**
+     * Rahmenstaerke in Millimetern. Farbe und Stil bleiben beim Entwurf.
+     *
+     * @param  array<string, mixed>  $options
+     */
+    private function rahmenstaerke(array $options): float
+    {
+        return round((float) ($options['card_border_mm'] ?? 0.0), 2);
     }
 
     /**

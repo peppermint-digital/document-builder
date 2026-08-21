@@ -115,11 +115,39 @@ it('carries a design\'s CSS into the sheet exactly once', function (): void {
     expect(substr_count($html, '.badge { color: red; }'))->toBe(1);
 });
 
-it('keeps a card exactly its size even when a design adds a border', function (): void {
+it('subtracts padding and border from the card instead of trusting box-sizing', function (): void {
+    $sheet = SheetSetup::grid(61, 54, columns: 2, rows: 2);
+    $preset = new CardPreset($sheet);
+
+    $css = $preset->css($sheet->page, ['card_padding_em' => 2.2, 'card_border_mm' => 0.5]);
+
+    // DomPDF setzt `box-sizing: border-box` NICHT um. Wer sich darauf
+    // verlaesst, druckt Karten, die breiter sind als ihr Platz im Raster —
+    // sichtbar erst am Papier, wenn die letzte Spalte ueber den Rand stoesst.
+    $polster = round(2.2 * $preset->basisSchriftgroesse() * 0.352778, 2);
+    $innen = round(61 - 2 * ($polster + 0.5), 2);
+
+    expect($css)->not->toContain('box-sizing')
+        ->and($css)->toContain("width: {$innen}mm")
+        ->and($css)->toContain("padding: {$polster}mm");
+});
+
+it('leaves the card at its full size when a design asks for no padding', function (): void {
     $sheet = SheetSetup::grid(61, 54, columns: 2, rows: 2);
     $css = (new CardPreset($sheet))->css($sheet->page);
 
-    // Ohne das laeuft ein Rahmen ueber die Kante und `overflow: hidden`
-    // schneidet ihn ab — sichtbar als fehlende Linie an einer Seite.
-    expect($css)->toContain('box-sizing: border-box');
+    expect($css)->toContain('width: 61mm')
+        ->and($css)->toContain('padding: 0mm');
+});
+
+it('scales the padding with the card, so one template serves both sizes', function (): void {
+    $optionen = ['card_padding_em' => 2.2];
+
+    $gross = (new CardPreset(SheetSetup::single(76, 124)))->css(PageSetup::din5008(), $optionen);
+    $klein = (new CardPreset(SheetSetup::grid(61, 54, columns: 2, rows: 2)))->css(PageSetup::din5008(), $optionen);
+
+    preg_match('/padding: ([\d.]+)mm/', $gross, $a);
+    preg_match('/padding: ([\d.]+)mm/', $klein, $b);
+
+    expect((float) $a[1])->toBeGreaterThan((float) $b[1]);
 });
