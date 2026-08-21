@@ -27,12 +27,16 @@
     },
     "require-dev": {
         "dompdf/dompdf": "^3.0",
+        "endroid/qr-code": "^5.0|^6.0",
         "laravel/pint": "^1.0",
         "orchestra/testbench": "^9.0|^10.0|^11.0",
-        "pestphp/pest": "^3.0"
+        "pestphp/pest": "^3.0",
+        "picqer/php-barcode-generator": "^2.0|^3.0"
     },
     "suggest": {
-        "dompdf/dompdf": "Required for the bundled DomPdfRenderer driver (^3.0)."
+        "dompdf/dompdf": "Required for the bundled DomPdfRenderer driver (^3.0).",
+        "endroid/qr-code": "Required to print QR codes on cards (badges, tickets).",
+        "picqer/php-barcode-generator": "Required to print CODE128 barcodes on cards."
     },
     "autoload": {
         "psr-4": {

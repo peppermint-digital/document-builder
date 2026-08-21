@@ -4,10 +4,12 @@ namespace Peppermint\DocumentBuilder;
 
 use Illuminate\Support\ServiceProvider;
 use Peppermint\DocumentBuilder\Console\InstallCommand;
+use Peppermint\DocumentBuilder\Contracts\CodeRenderer;
 use Peppermint\DocumentBuilder\Contracts\DocumentPreset;
 use Peppermint\DocumentBuilder\Contracts\DocumentRenderer;
 use Peppermint\DocumentBuilder\Data\PageSetup;
 use Peppermint\DocumentBuilder\Presets\Din5008Preset;
+use Peppermint\DocumentBuilder\Renderers\BundledCodeRenderer;
 use Peppermint\DocumentBuilder\Renderers\DomPdfRenderer;
 use Peppermint\DocumentBuilder\Services\LineItemsRenderer;
 use Peppermint\DocumentBuilder\Services\PlaceholderRenderer;
@@ -49,6 +51,17 @@ class DocumentBuilderServiceProvider extends ServiceProvider
         ));
 
         $this->app->singleton(DocumentBuilder::class);
+
+        // Der Code-Treiber ist optional: `endroid/qr-code` und
+        // `picqer/php-barcode-generator` sind Vorschlaege, keine
+        // Voraussetzungen. Wer keine Karten druckt, schleppt sie nicht mit.
+        $this->app->singleton(CodeRenderer::class, fn (): CodeRenderer => new BundledCodeRenderer);
+
+        $this->app->singleton(CardBuilder::class, fn ($app): CardBuilder => new CardBuilder(
+            $app->make(DocumentRenderer::class),
+            $app->make(PlaceholderRenderer::class),
+            $app->make(CodeRenderer::class),
+        ));
     }
 
     public function boot(): void
