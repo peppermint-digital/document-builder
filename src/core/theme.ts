@@ -1,5 +1,14 @@
-import { fromPaperLeft, fromPaperTop, paperSize } from './defaults';
-import type { PageSetup, SkeletonPreview } from './types';
+import {
+    cardBaseFontPt,
+    cardInnerSize,
+    cardPaddingMm,
+    CARD_TITLE_EM,
+    fromPaperLeft,
+    fromPaperTop,
+    paperSize,
+    round,
+} from './defaults';
+import type { CardSetup, PageSetup, SkeletonPreview } from './types';
 
 /** Brand palette offered in the colour picker. */
 export const BRAND_COLORS = ['#1a1a1a', '#666666', '#0f766e', '#b91c1c', '#1d4ed8', '#ffffff'];
@@ -219,4 +228,121 @@ export function escapeHtml(value: string): string {
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;');
+}
+
+/**
+ * Leinwand-CSS fuer eine Karte.
+ *
+ * Bearbeitet wird EINE Karte, nicht der Bogen: der Bogen ist Sache des Presets
+ * beim Druck, und eine Leinwand mit zwoelf gleichen Karten waere zwoelfmal
+ * dieselbe Bearbeitung. Das Blatt selbst ist deshalb die Karte — in ihrer
+ * Innenflaeche, mit ihrem Innenabstand und ihrem Rahmen, so wie DomPDF sie
+ * setzt.
+ *
+ * Die Klassennamen sind dieselben wie in `CardPreset::css()`. Das ist der
+ * eigentliche Punkt: was hier aussieht wie im Editor, sieht auf dem Papier
+ * genauso aus, weil beide Seiten dieselben Regeln auf dieselben Klassen legen.
+ */
+export function cardCanvasCss(card: CardSetup, preview: SkeletonPreview = {}): string {
+    const innen = cardInnerSize(card);
+    const polster = cardPaddingMm(card);
+    const rahmen = round(card.borderMm, 2);
+    const basis = cardBaseFontPt(card);
+    const rahmenfarbe = rahmen > 0 ? '#cbd5e1' : 'transparent';
+
+    // Ohne Code waere die Karte am Einlass wertlos. Er gehoert dem Geruest,
+    // wie die Pflichtangaben im DIN-Preset — hier nur der Platz dafuer.
+    //
+    // Die Beschriftung MUSS an ein Pseudo-Element: `content` auf dem `div`
+    // selbst rendert nichts, und der Platzhalter stuende als leerer,
+    // unerklaerter Kasten auf der Karte. Vom Pruefstand gefunden, nicht vom
+    // Test — ein leerer Kasten ist syntaktisch tadellos.
+
+    return `
+        html { background: #f1f5f9; }
+
+        body {
+            position: relative;
+            /* Innenmass, NICHT box-sizing: DomPDF setzt border-box nicht um.
+               Die Leinwand muss hier denselben Weg gehen wie das Papier. */
+            width: ${innen.width}mm;
+            min-height: ${innen.height}mm;
+            padding: ${polster}mm;
+            border: ${rahmen}mm solid ${rahmenfarbe};
+            margin: 8mm auto !important;
+            background: #ffffff;
+            box-shadow: 0 1px 3px rgba(15, 23, 42, 0.18);
+            font-family: "DejaVu Sans", Helvetica, Arial, sans-serif;
+            font-size: ${basis}pt;
+            line-height: 1.35;
+            color: #1a1a1a;
+            overflow: hidden;
+        }
+
+        /* Dieselben Regeln wie in CardPreset::css() — sonst luegt die Vorschau. */
+        .db-card-title { font-size: ${CARD_TITLE_EM}em; font-weight: bold; line-height: 1.15; }
+        .db-card-subtitle { font-size: 1.15em; }
+        .db-card-rows { font-size: 0.9em; }
+        .db-card-code { text-align: center; }
+
+        /* Die Zonen fliessen auf der Karte, statt am Rand zu kleben. Am
+           Kartenboden verankert ueberlagert die Fusszeile die letzte Zeile —
+           probiert, gesehen, verworfen (siehe #4432). */
+        .db-zone { position: relative; }
+        .db-zone-body { margin-top: 0; }
+
+        .db-zone-footer {
+            margin-top: 1.5mm;
+            border-top: 0.3mm dashed #cbd5e1;
+            padding-top: 1mm;
+            font-size: 0.75em;
+            color: #475569;
+        }
+
+        .db-zone-header:empty::after { content: 'Kartenkopf — hier Bausteine ablegen'; }
+        .db-zone-footer:empty::after { content: 'Kartenfuß — hier Bausteine ablegen'; }
+        .db-zone-header:empty::after,
+        .db-zone-footer:empty::after {
+            display: block;
+            font-size: 0.7em;
+            color: #94a3b8;
+            font-style: italic;
+        }
+
+        .db-canvas-code {
+            display: block;
+            margin: 2mm auto 0 auto;
+            /* 18mm, nicht 25: mit Ueberschrift und Trennlinie passt der
+               vollste Entwurf sonst nicht mehr auf 124mm (#4432). */
+            width: 18mm;
+            height: 18mm;
+            box-sizing: border-box;
+            border: 0.3mm dashed #cbd5e1;
+            pointer-events: none;
+        }
+
+        .db-canvas-code::after {
+            content: 'Code — vom Dokument gefüllt';
+            display: block;
+            padding: 1mm;
+            font-size: 6pt;
+            line-height: 1.2;
+            color: #94a3b8;
+            text-align: center;
+        }
+
+        p { margin: 0 0 1.5mm 0; }
+        .db-divider { border: 0; border-top: 0.2mm solid #cccccc; margin: 1.5mm 0; }
+        [data-db-sample] { color: #64748b; }
+    `;
+}
+
+/**
+ * Die unantastbare Dekoration der Karte.
+ *
+ * Bislang nur der Code-Platz. Er ist bewusst keine Komponente: als Baustein
+ * waere er loeschbar, und ein Schild ohne Code ist am Einlass wertlos.
+ */
+export function cardSkeletonHtml(_preview: SkeletonPreview = {}): string {
+    return '<div class="db-canvas-code" data-db-skeleton="1"></div>';
 }

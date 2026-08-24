@@ -43,6 +43,42 @@ export interface PageSetup {
     marginLeft: number;
 }
 
+/**
+ * Kartengeometrie in Millimetern — spiegelt `Data\SheetSetup`.
+ *
+ * Eine Karte ist selten ein Blatt Papier: sie ist eine von mehreren auf einem
+ * Bogen, in fester Groesse, mit Rinnen dazwischen. `PageSetup` beschreibt das
+ * Papier, `CardSetup` das Raster darauf. Beides zusammen ergibt erst die
+ * Zeichenflaeche.
+ */
+export interface CardSetup {
+    /** Breite einer einzelnen Karte. */
+    cardWidth: number;
+    /** Hoehe einer einzelnen Karte. */
+    cardHeight: number;
+    columns: number;
+    rows: number;
+    gutterX: number;
+    gutterY: number;
+    cropMarks: boolean;
+    /**
+     * Innenabstand in `em`, damit er mit der Kartengroesse mitwaechst.
+     * Wird zur Berechnung der Innenflaeche in Millimeter umgerechnet —
+     * siehe `cardInnerSize()`.
+     */
+    paddingEm: number;
+    /** Rahmenstaerke in Millimetern. */
+    borderMm: number;
+    /**
+     * Feste Schriftgroesse in Punkt statt der Ableitung aus der Kartenhoehe.
+     * `null` heisst: ableiten.
+     */
+    fontPt: number | null;
+}
+
+/** Welches Geruest eine Vorlage bedient. Spiegelt `DocumentPreset::name()`. */
+export type PresetName = 'din5008' | 'card';
+
 /** A placeholder the editor offers in its variable picker. */
 export interface PlaceholderDefinition {
     key: string;
@@ -84,6 +120,14 @@ export interface DocumentBuilderOptions {
     /** A previously stored design, or `undefined` for a fresh template. */
     design?: DocumentDesign | null;
     page?: Partial<PageSetup>;
+    /**
+     * Welches Geruest der Editor bedient. Bestimmt Leinwandmass, Dekoration
+     * und Startinhalt. Vorgabe ist `din5008` — die Fassung, die es vor den
+     * Karten allein gab.
+     */
+    preset?: PresetName;
+    /** Kartenmass; nur ausgewertet, wenn `preset` auf `card` steht. */
+    card?: Partial<CardSetup>;
     /** Columns offered in the line-item trait panel. */
     availableColumns?: LineItemColumn[];
     placeholders?: PlaceholderDefinition[] | Record<string, string>;

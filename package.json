@@ -23,6 +23,7 @@
     "build:css": "node scripts/copy-css.mjs",
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
+    "test": "node scripts/build-test-bundle.mjs && node --test tests/js/*.test.mjs",
     "prepare": "npm run build",
     "prepublishOnly": "npm run build"
   },

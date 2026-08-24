@@ -6,3 +6,4 @@ package-lock.json
 .phpunit.cache
 .DS_Store
 *.pdf
+tests/js/.bundle/

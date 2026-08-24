@@ -5,31 +5,28 @@ import { registerBlocks } from './blocks';
 import { LINE_ITEMS_TYPE, registerComponents, TOTALS_TYPE } from './components';
 import { DEFAULT_COLUMNS, DIN_5008 } from './defaults';
 import { locales } from './i18n';
-import { BRAND_COLORS, canvasCss, FONT_STACKS, skeletonHtml } from './theme';
+import { resolvePreset } from './presets';
+import type { EditorPreset } from './presets';
+import { BRAND_COLORS, FONT_STACKS } from './theme';
 import type {
     DocumentBuilderInstance,
     DocumentBuilderOptions,
     DocumentDesign,
     LineItemColumn,
     PageSetup,
+    SkeletonPreview,
     ZoneName,
 } from './types';
 import { buildZones, registerZones, zoneHtml } from './zones';
 import { insertPlaceholder, normalizePlaceholders, registerPlaceholderRteAction } from './variables';
-
-/** Womit der Mittelteil einer frischen Vorlage beginnt. */
-const STARTER_BODY =
-    '<p>Sehr geehrte Damen und Herren,</p>' +
-    '<p>vielen Dank für Ihre Anfrage. Gern unterbreiten wir Ihnen folgendes Angebot.</p>' +
-    '<table data-db-block="line-items" class="db-line-items"></table>' +
-    '<table data-db-block="totals" class="db-totals"></table>' +
-    '<p>Wir freuen uns auf Ihre Rückmeldung.</p>';
 
 export function createDocumentBuilder(options: DocumentBuilderOptions): DocumentBuilderInstance {
     const {
         container,
         design,
         page: pageOverrides = {},
+        preset: presetName,
+        card: cardOverrides,
         availableColumns = DEFAULT_COLUMNS,
         placeholders,
         locale = 'de',
@@ -43,6 +40,7 @@ export function createDocumentBuilder(options: DocumentBuilderOptions): Document
     } = options;
 
     const page: PageSetup = { ...DIN_5008, ...pageOverrides };
+    const preset = resolvePreset(presetName, page, cardOverrides);
     const normalizedPlaceholders = normalizePlaceholders(placeholders);
 
     container.classList.add('pm-document-builder', `pm-document-builder--${theme}`);
@@ -55,7 +53,7 @@ export function createDocumentBuilder(options: DocumentBuilderOptions): Document
         // The host app owns persistence — it gets the design and decides.
         storageManager: false,
         undoManager: { trackSelection: false },
-        canvasCss: canvasCss(page, skeletonPreview),
+        canvasCss: preset.canvasCss(skeletonPreview),
         // Ein Dokument hat genau ein Format: das Blatt. Breakpoints gibt es im
         // Druck nicht. Die Leiste selbst wird in styles.css ausgeblendet —
         // `Panels.removePanel('devices-c')` greift nicht, GrapesJS baut sie
@@ -158,14 +156,14 @@ export function createDocumentBuilder(options: DocumentBuilderOptions): Document
                         header: next?.header ?? defaults.header ?? '',
                         // `html` ist die alte Einfeld-Fassung: als Rumpf lesen,
                         // damit gespeicherte Entwürfe nicht verfallen.
-                        body: next?.body ?? next?.html ?? STARTER_BODY,
+                        body: next?.body ?? next?.html ?? preset.starterBody(),
                         footer: next?.footer ?? defaults.footer ?? '',
                     }),
                 );
             }
 
             editor.UndoManager.clear();
-            paintSkeleton(editor, skeletonPreview);
+            paintSkeleton(editor, preset, skeletonPreview);
         },
 
         insertPlaceholder(key: string): void {
@@ -197,7 +195,7 @@ export function createDocumentBuilder(options: DocumentBuilderOptions): Document
     }
 
     editor.onReady(() => {
-        paintSkeleton(editor, skeletonPreview);
+        paintSkeleton(editor, preset, skeletonPreview);
         onReady?.(instance);
     });
 
@@ -278,7 +276,7 @@ function findByType(editor: Editor, type: string): Component | undefined {
  * export, and a user could select and delete it. This way it is visible,
  * inert and impossible to save.
  */
-function paintSkeleton(editor: Editor, preview: Parameters<typeof skeletonHtml>[0]): void {
+function paintSkeleton(editor: Editor, preset: EditorPreset, preview: SkeletonPreview): void {
     const doc = editor.Canvas.getDocument();
 
     if (!doc?.body) {
@@ -286,5 +284,5 @@ function paintSkeleton(editor: Editor, preview: Parameters<typeof skeletonHtml>[
     }
 
     doc.body.querySelectorAll('[data-db-skeleton]').forEach((node) => node.remove());
-    doc.body.insertAdjacentHTML('beforeend', skeletonHtml(preview));
+    doc.body.insertAdjacentHTML('beforeend', preset.skeletonHtml(preview));
 }
