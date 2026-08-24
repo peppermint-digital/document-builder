@@ -250,13 +250,6 @@ export function cardCanvasCss(card: CardSetup, preview: SkeletonPreview = {}): s
     const basis = cardBaseFontPt(card);
     const rahmenfarbe = rahmen > 0 ? '#cbd5e1' : 'transparent';
 
-    // Ohne Code waere die Karte am Einlass wertlos. Er gehoert dem Geruest,
-    // wie die Pflichtangaben im DIN-Preset — hier nur der Platz dafuer.
-    //
-    // Die Beschriftung MUSS an ein Pseudo-Element: `content` auf dem `div`
-    // selbst rendert nichts, und der Platzhalter stuende als leerer,
-    // unerklaerter Kasten auf der Karte. Vom Pruefstand gefunden, nicht vom
-    // Test — ein leerer Kasten ist syntaktisch tadellos.
 
     return `
         html { background: #f1f5f9; }
@@ -266,7 +259,13 @@ export function cardCanvasCss(card: CardSetup, preview: SkeletonPreview = {}): s
             /* Innenmass, NICHT box-sizing: DomPDF setzt border-box nicht um.
                Die Leinwand muss hier denselben Weg gehen wie das Papier. */
             width: ${innen.width}mm;
-            min-height: ${innen.height}mm;
+            /* Feste Hoehe, keine Untergrenze: der Renderer setzt die Hoehe
+               fest und schneidet ab (.db-card mit overflow hidden). Eine
+               Leinwand, die stattdessen mitwaechst, zeigt Inhalt, den das
+               Papier verschluckt — und der Nutzer erfaehrt es erst am Stapel.
+               Vom Pruefstand gefunden: auf 86 x 54 lief der Inhalt ueber und
+               die Karte wurde einfach hoeher. */
+            height: ${innen.height}mm;
             padding: ${polster}mm;
             border: ${rahmen}mm solid ${rahmenfarbe};
             margin: 8mm auto !important;
@@ -309,27 +308,33 @@ export function cardCanvasCss(card: CardSetup, preview: SkeletonPreview = {}): s
             font-style: italic;
         }
 
-        .db-canvas-code {
-            display: block;
-            margin: 2mm auto 0 auto;
-            /* 18mm, nicht 25: mit Ueberschrift und Trennlinie passt der
-               vollste Entwurf sonst nicht mehr auf 124mm (#4432). */
+        /* Die Zeilengruppe. Klassennamen wie in CardBuilder::zeilenBlock() —
+           die Ueberschrift gehoert IN den Block, damit sie mit ihm
+           verschwindet, wenn niemand einen Workshop gebucht hat (#630). */
+        .db-card-rows-title { font-weight: bold; margin-top: 1.5mm; }
+        .db-card-row { margin-top: 0.8mm; }
+        .db-card-row-label { font-weight: bold; }
+
+        /* Der Code-Platz. 18mm, nicht 25: mit Ueberschrift und Trennlinie
+           passt der vollste Entwurf sonst nicht mehr auf 124mm (#4432). */
+        .db-card-code { margin-top: 2mm; text-align: center; }
+
+        .db-card-code-box,
+        .db-card-image-box {
+            display: inline-block;
+            box-sizing: border-box;
             width: 18mm;
             height: 18mm;
-            box-sizing: border-box;
-            border: 0.3mm dashed #cbd5e1;
-            pointer-events: none;
-        }
-
-        .db-canvas-code::after {
-            content: 'Code — vom Dokument gefüllt';
-            display: block;
             padding: 1mm;
+            border: 0.3mm dashed #cbd5e1;
             font-size: 6pt;
             line-height: 1.2;
             color: #94a3b8;
             text-align: center;
         }
+
+        .db-card-image-slot { margin-top: 1.5mm; text-align: center; }
+        .db-card-image { max-width: 100%; }
 
         p { margin: 0 0 1.5mm 0; }
         .db-divider { border: 0; border-top: 0.2mm solid #cccccc; margin: 1.5mm 0; }
@@ -338,11 +343,16 @@ export function cardCanvasCss(card: CardSetup, preview: SkeletonPreview = {}): s
 }
 
 /**
- * Die unantastbare Dekoration der Karte.
+ * Die Karte hat keine Dekoration, die ihr Geruest zeichnen muesste.
  *
- * Bislang nur der Code-Platz. Er ist bewusst keine Komponente: als Baustein
- * waere er loeschbar, und ein Schild ohne Code ist am Einlass wertlos.
+ * Beim Brief gibt es Anschriftfeld, Falzmarken und Betreffzeile — Dinge, die
+ * dem Preset gehoeren und trotzdem sichtbar sein muessen. Bei der Karte ist
+ * das Geruest die Kartenkante selbst, und die ist bereits die Leinwand.
+ *
+ * Der Code stand hier kurzzeitig als Dekoration. Das war falsch: er soll sich
+ * setzen lassen, nur nicht verschwinden. Er ist jetzt ein Baustein, dessen
+ * letztes Exemplar sich nicht loeschen laesst — siehe `enforceCardCode()`.
  */
 export function cardSkeletonHtml(_preview: SkeletonPreview = {}): string {
-    return '<div class="db-canvas-code" data-db-skeleton="1"></div>';
+    return '';
 }

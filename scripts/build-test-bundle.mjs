@@ -24,7 +24,14 @@ mkdirSync(ziel, { recursive: true });
 const eintritt = resolve(ziel, 'eintritt.ts');
 writeFileSync(
     eintritt,
-    "export * from '../../../src/core/defaults';\nexport * from '../../../src/core/presets';\nexport * from '../../../src/core/theme';\n",
+    [
+        "export * from '../../../src/core/defaults';",
+        "export * from '../../../src/core/presets';",
+        "export * from '../../../src/core/theme';",
+        "export * from '../../../src/core/card-components';",
+        "export * from '../../../src/core/blocks';",
+        "export * from '../../../src/core/zones';",
+    ].join("\n"),
 );
 
 await build({

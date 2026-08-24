@@ -1,6 +1,11 @@
+import type { Editor } from 'grapesjs';
+
+import { registerBlocks, registerCardBlocks } from './blocks';
+import { registerCardComponents } from './card-components';
+import { registerComponents } from './components';
 import { CARD_DEFAULT, DIN_5008 } from './defaults';
 import { canvasCss, cardCanvasCss, cardSkeletonHtml, skeletonHtml } from './theme';
-import type { CardSetup, PageSetup, PresetName, SkeletonPreview } from './types';
+import type { CardSetup, LineItemColumn, PageSetup, PresetName, SkeletonPreview } from './types';
 
 /**
  * Das Geruest, gegen das eine Vorlage gebaut wird — die Editor-Seite von
@@ -24,6 +29,10 @@ export interface EditorPreset {
     skeletonHtml(preview: SkeletonPreview): string;
     /** Womit der Mittelteil einer frischen Vorlage beginnt. */
     starterBody(): string;
+    /** Welche Bausteine in der Leiste stehen. */
+    registerBlocks(editor: Editor): void;
+    /** Welche Komponenten der Editor kennt. */
+    registerComponents(editor: Editor, columns: LineItemColumn[]): void;
 }
 
 /** Womit der Mittelteil einer frischen Rechnung beginnt. */
@@ -43,7 +52,10 @@ const STARTER_BODY_DIN =
  */
 const STARTER_BODY_CARD =
     '<p class="db-card-title">{{ title }}</p>' +
-    '<p class="db-card-subtitle">{{ subtitle }}</p>';
+    '<p class="db-card-subtitle">{{ subtitle }}</p>' +
+    // Der Code steht von Anfang an drauf, weil er nicht fehlen darf: ein
+    // Schild ohne Code ist am Einlass wertlos (#4433).
+    '<div data-db-block="card-code" class="db-card-code"></div>';
 
 /** Das Blatt-Geruest nach DIN 5008 — die Fassung, die es vor den Karten allein gab. */
 export function din5008Preset(page: PageSetup = DIN_5008): EditorPreset {
@@ -52,6 +64,8 @@ export function din5008Preset(page: PageSetup = DIN_5008): EditorPreset {
         canvasCss: (preview) => canvasCss(page, preview),
         skeletonHtml: (preview) => skeletonHtml(preview),
         starterBody: () => STARTER_BODY_DIN,
+        registerBlocks: (editor) => registerBlocks(editor),
+        registerComponents: (editor, columns) => registerComponents(editor, columns),
     };
 }
 
@@ -62,6 +76,11 @@ export function cardPreset(card: CardSetup = CARD_DEFAULT): EditorPreset {
         canvasCss: (preview) => cardCanvasCss(card, preview),
         skeletonHtml: (preview) => cardSkeletonHtml(preview),
         starterBody: () => STARTER_BODY_CARD,
+        registerBlocks: (editor) => registerCardBlocks(editor),
+        // Karten kennen weder Positionstabelle noch Summenblock. Sie hier
+        // trotzdem zu registrieren waere folgenlos — aber die Leiste zeigt,
+        // was der Editor kann, und der Editor soll nur koennen, was druckt.
+        registerComponents: (editor) => registerCardComponents(editor),
     };
 }
 

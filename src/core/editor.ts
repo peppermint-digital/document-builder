@@ -1,8 +1,8 @@
 import grapesjs from 'grapesjs';
 import type { Component, Editor } from 'grapesjs';
 
-import { registerBlocks } from './blocks';
-import { LINE_ITEMS_TYPE, registerComponents, TOTALS_TYPE } from './components';
+import { CARD_CODE_TYPE, codeRemovability } from './card-components';
+import { LINE_ITEMS_TYPE, TOTALS_TYPE } from './components';
 import { DEFAULT_COLUMNS, DIN_5008 } from './defaults';
 import { locales } from './i18n';
 import { resolvePreset } from './presets';
@@ -103,10 +103,11 @@ export function createDocumentBuilder(options: DocumentBuilderOptions): Document
     }
 
     registerZones(editor);
-    registerComponents(editor, availableColumns);
-    registerBlocks(editor);
+    preset.registerComponents(editor, availableColumns);
+    preset.registerBlocks(editor);
     registerPlaceholderRteAction(editor, normalizedPlaceholders);
     enforceSingleInstance(editor);
+    enforceCardCode(editor, preset);
     redirectSelectionToOwner(editor);
 
     const instance: DocumentBuilderInstance = {
@@ -152,13 +153,16 @@ export function createDocumentBuilder(options: DocumentBuilderOptions): Document
             } else {
                 editor.Components.getWrapper()?.set('content', '');
                 editor.setComponents(
-                    buildZones({
-                        header: next?.header ?? defaults.header ?? '',
-                        // `html` ist die alte Einfeld-Fassung: als Rumpf lesen,
-                        // damit gespeicherte Entwürfe nicht verfallen.
-                        body: next?.body ?? next?.html ?? preset.starterBody(),
-                        footer: next?.footer ?? defaults.footer ?? '',
-                    }),
+                    buildZones(
+                        {
+                            header: next?.header ?? defaults.header ?? '',
+                            // `html` ist die alte Einfeld-Fassung: als Rumpf lesen,
+                            // damit gespeicherte Entwürfe nicht verfallen.
+                            body: next?.body ?? next?.html ?? preset.starterBody(),
+                            footer: next?.footer ?? defaults.footer ?? '',
+                        },
+                        preset.name,
+                    ),
                 );
             }
 
@@ -229,6 +233,36 @@ function enforceSingleInstance(editor: Editor): void {
             );
         }
     });
+}
+
+/**
+ * Der letzte Code der Karte laesst sich nicht loeschen.
+ *
+ * Entschieden in #4433: ein Schild ohne Code ist am Einlass wertlos, und eine
+ * wegklickbare Warnung waere keine Absicherung. Statt das Loeschen abzufangen
+ * und hinterher zu erklaeren, verschwindet der Papierkorb — solange es nur
+ * einen gibt. Ab dem zweiten darf jeder weg, denn dann bleibt einer uebrig.
+ *
+ * Fuer das DIN-Geruest gilt das nicht: eine Rechnung hat keinen Code.
+ */
+function enforceCardCode(editor: Editor, preset: EditorPreset): void {
+    if (preset.name !== 'card') {
+        return;
+    }
+
+    const abgleichen = (): void => {
+        const codes = editor.Components.getWrapper()?.findType(CARD_CODE_TYPE) ?? [];
+        const loeschbar = codeRemovability(codes.length);
+
+        codes.forEach((code) => {
+            code.set('removable', loeschbar);
+            code.set('copyable', true);
+        });
+    };
+
+    editor.on('component:add', abgleichen);
+    editor.on('component:remove', abgleichen);
+    editor.on('load', abgleichen);
 }
 
 /**

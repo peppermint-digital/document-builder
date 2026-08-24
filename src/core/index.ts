@@ -16,6 +16,8 @@ export {
 } from './defaults';
 export { cardPreset, din5008Preset, resolvePreset } from './presets';
 export { LINE_ITEMS_TYPE, TOTALS_TYPE } from './components';
+export { CARD_CODE_TYPE, CARD_IMAGE_TYPE, CARD_ROWS_TYPE } from './card-components';
+export { registerBlocks, registerCardBlocks } from './blocks';
 export { normalizePlaceholders, tokenFor } from './variables';
 export { BRAND_COLORS, FONT_STACKS } from './theme';
 

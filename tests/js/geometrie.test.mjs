@@ -136,9 +136,19 @@ describe('Presets', () => {
         const css = cardPreset({ ...CARD_DEFAULT, cardWidth: 86, cardHeight: 54 }).canvasCss({});
 
         assert.match(css, /width: 86mm/);
-        assert.match(css, /min-height: 54mm/);
+        assert.match(css, /height: 54mm/);
         // Die Gegenprobe: kein Papierformat hat sich eingeschlichen.
         assert.doesNotMatch(css, /210mm|297mm/);
+    });
+
+    it('haelt die Kartenhoehe fest, statt mit dem Inhalt zu wachsen', () => {
+        // Der Renderer setzt `height` und schneidet ab. Mit `min-height` waere
+        // die Leinwand grosszuegiger als das Papier und wuerde Inhalt zeigen,
+        // den niemand je zu sehen bekommt.
+        const css = cardPreset({ ...CARD_DEFAULT, cardWidth: 86, cardHeight: 54 }).canvasCss({});
+
+        assert.doesNotMatch(css, /min-height/, 'min-height laesst die Karte wachsen');
+        assert.match(css, /overflow: hidden/);
     });
 
     it('haelt die Kartenklassen mit dem Renderer gleich', () => {
@@ -149,20 +159,23 @@ describe('Presets', () => {
         }
     });
 
-    it('beschriftet den Code-Platzhalter, statt einen leeren Kasten zu zeigen', () => {
-        // Ein unbeschrifteter Kasten auf der Karte erklaert niemandem, was dort
-        // spaeter steht. Die erste Fassung legte `content` auf das `div` selbst
-        // — syntaktisch tadellos, gerendert nichts. Der Pruefstand fand es,
-        // dieser Test haelt es fest.
-        const css = cardPreset(CARD_DEFAULT).canvasCss({});
-
-        assert.match(css, /\.db-canvas-code::after \{[^}]*content:/s, 'Beschriftung gehoert ans Pseudo-Element');
-    });
-
     it('haelt den Code-Platz bei 18mm', () => {
         // 25mm passten nicht mehr, sobald Ueberschrift und Trennlinie dazukamen
         // (#4432). Die Zahl ist eine Entscheidung, kein Zufall.
-        assert.match(cardPreset(CARD_DEFAULT).canvasCss({}), /\.db-canvas-code \{[^}]*width: 18mm/s);
+        assert.match(cardPreset(CARD_DEFAULT).canvasCss({}), /\.db-card-code-box,[\s\S]*?width: 18mm/);
+    });
+
+    it('zeichnet fuer die Karte keine Geruest-Dekoration', () => {
+        // Der Brief braucht Anschriftfeld und Falzmarken sichtbar. Bei der
+        // Karte ist das Geruest die Kartenkante — und die ist die Leinwand.
+        assert.equal(cardPreset(CARD_DEFAULT).skeletonHtml({}), '');
+        assert.notEqual(din5008Preset(DIN_5008).skeletonHtml({}), '');
+    });
+
+    it('setzt den Code von Anfang an auf eine frische Karte', () => {
+        // Er darf nicht fehlen; ihn erst suchen zu muessen waere der erste
+        // Schritt zu einem Schild ohne Code.
+        assert.match(cardPreset(CARD_DEFAULT).starterBody(), /data-db-block="card-code"/);
     });
 
     it('laesst das DIN-Geruest unveraendert', () => {

@@ -1,16 +1,28 @@
 import type { Component, Editor } from 'grapesjs';
 
-import type { ZoneName } from './types';
+import type { PresetName, ZoneName } from './types';
 
 export const ZONE_TYPE = 'db-zone';
 
 /** Reihenfolge im Canvas — sie bestimmt auch die Reihenfolge im Ebenenbaum. */
 export const ZONES: ZoneName[] = ['header', 'body', 'footer'];
 
-const LABELS: Record<ZoneName, string> = {
-    header: 'Briefkopf',
-    body: 'Inhalt',
-    footer: 'Fußzeile',
+/**
+ * Wie die drei Bereiche heissen. Der Aufbau ist derselbe, die Begriffe sind es
+ * nicht: „Briefkopf" auf einem Namensschild waere schlicht falsch, und ein
+ * Name im Ebenenbaum, der nicht zur Sache passt, kostet jede Suche danach.
+ */
+const LABELS: Record<PresetName, Record<ZoneName, string>> = {
+    din5008: {
+        header: 'Briefkopf',
+        body: 'Inhalt',
+        footer: 'Fußzeile',
+    },
+    card: {
+        header: 'Kartenkopf',
+        body: 'Karteninhalt',
+        footer: 'Kartenfuß',
+    },
 };
 
 /**
@@ -48,13 +60,19 @@ export function registerZones(editor: Editor): void {
  * Baut die drei Zonen mit dem übergebenen Inhalt auf.
  *
  * @param contents HTML je Zone; fehlende Zonen bleiben leer.
+ * @param preset Bestimmt die Beschriftung im Ebenenbaum.
  */
-export function buildZones(contents: Partial<Record<ZoneName, string>>): string {
+export function buildZones(
+    contents: Partial<Record<ZoneName, string>>,
+    preset: PresetName = 'din5008',
+): string {
+    const labels = LABELS[preset] ?? LABELS.din5008;
+
     return ZONES.map((zone) => {
         const inner = contents[zone] ?? '';
 
         return (
-            `<div data-db-zone="${zone}" class="db-zone db-zone-${zone}" data-gjs-name="${LABELS[zone]}">` +
+            `<div data-db-zone="${zone}" class="db-zone db-zone-${zone}" data-gjs-name="${labels[zone]}">` +
             inner +
             '</div>'
         );
