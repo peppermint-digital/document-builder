@@ -184,13 +184,46 @@ npm install @peppermint-digital/document-builder
 import { DEFAULT_COLUMNS, DIN_5008, type LineItemColumn } from '@peppermint-digital/document-builder/core';
 ```
 
+### Editing cards
+
+A card is not a small page. `PAPER` is a fixed list, so 86 x 54 mm cannot be
+expressed as a paper size at all — the editor takes a preset instead, and the
+card preset sizes the canvas from the card:
+
+```tsx
+<DocumentBuilder
+    preset="card"
+    card={{ cardWidth: 86, cardHeight: 54 }}
+    value={design}
+    onChange={setDesign}
+/>
+```
+
+The preset decides three things: how big the canvas is, which blocks the
+sidebar offers, and what a fresh template starts with. On a card that means
+title, subtitle, row group, code and named image — and no line-item table,
+because a position on a name badge is a misunderstanding that only surfaces at
+the printer.
+
+Two rules the card preset enforces, both of them the reason it exists:
+
+- **The canvas is the card, at print size, clipped.** The renderer sets a fixed
+  height and hides the overflow; a canvas that grew with its content would show
+  text the paper swallows.
+- **The last code cannot be deleted.** A badge without a code is worthless at
+  the door, and a dismissible warning is not a safeguard.
+
+`preset` and `card` are read when the editor mounts. Changing either needs a
+remount via `key`, the same as `theme` and `locale`.
+
 ## Roadmap
 
 - [x] Data contract, placeholder and line-item rendering
 - [x] DIN 5008 preset, verified against DomPDF
 - [x] Renderer driver interface
-- [ ] GrapesJS editor with bound zones and domain blocks
-- [ ] Conditional sections
+- [x] GrapesJS editor with bound zones and domain blocks
+- [x] Card preset — badges and tickets, sheet layout, crop marks
+- [x] Named row groups (a conditional can only ask "are there rows?")
 - [ ] A neutral (non-DIN) preset for international documents
 
 ## License

@@ -2,11 +2,13 @@ import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
 
 import { createDocumentBuilder } from '../core/editor';
 import type {
+    CardSetup,
     DocumentBuilderInstance,
     DocumentDesign,
     LineItemColumn,
     PageSetup,
     PlaceholderDefinition,
+    PresetName,
     SkeletonPreview,
     ZoneName,
 } from '../core/types';
@@ -21,6 +23,17 @@ export interface DocumentBuilderProps {
     value?: DocumentDesign | null;
     onChange?: (design: DocumentDesign) => void;
     page?: Partial<PageSetup>;
+    /**
+     * Welches Gerüst der Editor bedient. Vorgabe `din5008`.
+     *
+     * Wie `theme` und `locale` erst beim Montieren gelesen: ein Wechsel braucht
+     * einen Remount über `key`. Das ist Absicht — Gerüst und Kartenmaß
+     * bestimmen die Leinwand, und die nachträglich umzubauen wäre teurer und
+     * fehleranfälliger, als den Editor neu aufzusetzen.
+     */
+    preset?: PresetName;
+    /** Kartenmaß; nur ausgewertet, wenn `preset` auf `card` steht. */
+    card?: Partial<CardSetup>;
     availableColumns?: LineItemColumn[];
     placeholders?: PlaceholderDefinition[] | Record<string, string>;
     /** Context drawn behind the free zone: address window, subject, footer. */
@@ -51,6 +64,8 @@ export const DocumentBuilder = forwardRef<DocumentBuilderHandle, DocumentBuilder
             value,
             onChange,
             page,
+            preset,
+            card,
             availableColumns,
             placeholders,
             skeletonPreview,
@@ -86,6 +101,8 @@ export const DocumentBuilder = forwardRef<DocumentBuilderHandle, DocumentBuilder
                 container: containerRef.current,
                 design: value ?? null,
                 page,
+                preset,
+                card,
                 availableColumns,
                 placeholders,
                 skeletonPreview,
@@ -157,13 +174,21 @@ export const DocumentBuilder = forwardRef<DocumentBuilderHandle, DocumentBuilder
 );
 
 export type {
+    CardSetup,
     DocumentBuilderInstance,
     DocumentDesign,
     LineItemColumn,
     PageSetup,
     PlaceholderDefinition,
+    PresetName,
     SkeletonPreview,
     ZoneName,
 } from '../core/types';
-export { DEFAULT_COLUMNS, DIN_5008 } from '../core/defaults';
+export {
+    CARD_DEFAULT,
+    cardBaseFontPt,
+    cardInnerSize,
+    DEFAULT_COLUMNS,
+    DIN_5008,
+} from '../core/defaults';
 export { tokenFor } from '../core/variables';

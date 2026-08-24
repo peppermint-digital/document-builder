@@ -1,7 +1,7 @@
 {
   "name": "@peppermint-digital/document-builder",
-  "version": "0.1.0",
-  "description": "A drag & drop builder for print-ready business documents in React and Vue, built on GrapesJS. Produces DIN 5008 compliant HTML that renders faithfully through DomPDF.",
+  "version": "0.3.0",
+  "description": "A drag & drop builder for print-ready business documents and cards in React and Vue, built on GrapesJS. Ships a DIN 5008 preset and a card preset, both rendering faithfully through DomPDF.",
   "exports": {
     "./core": {
       "types": "./dist/core/index.d.ts",
@@ -59,15 +59,18 @@
     "url": "git+https://github.com/peppermint-digital/document-builder.git"
   },
   "keywords": [
-    "react",
-    "vue",
-    "pdf",
-    "document",
-    "invoice",
+    "badge",
+    "card",
     "din5008",
-    "grapesjs",
+    "document",
     "drag-and-drop",
-    "template"
+    "grapesjs",
+    "invoice",
+    "pdf",
+    "react",
+    "template",
+    "ticket",
+    "vue"
   ],
   "author": "Peppermint Digital",
   "license": "MIT"
