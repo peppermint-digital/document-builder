@@ -92,7 +92,10 @@ class TotalsRenderer
             default => $currency,
         };
 
-        return number_format($amount, 2, $decimal, $thousands).' '.$symbol;
+        // Geschuetztes Leerzeichen, siehe LineItemsRenderer: Der Gesamtbetrag
+        // ist fett und damit breiter als jede Positionszeile — er bricht als
+        // erster, und genau dort faellt es am meisten auf.
+        return number_format($amount, 2, $decimal, $thousands)."\u{00A0}".$symbol;
     }
 
     private function escape(string $value): string

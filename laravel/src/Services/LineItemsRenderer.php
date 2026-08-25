@@ -11,9 +11,15 @@ use Peppermint\DocumentBuilder\Data\LineItem;
  * template can say where the table goes and which columns it has; how many
  * rows it grows to is decided at print time.
  *
- * Column widths are always written into a `<colgroup>`. DomPDF's automatic
- * table layout is weak and will happily wrap an amount like "1.137,50 €" onto
- * two lines — explicit widths are not a nicety here, they are the fix.
+ * Column widths are always written into a `<colgroup>` und gelten wegen
+ * `table-layout: fixed` im Preset verbindlich. Ohne das sind sie fuer DomPDF
+ * nur ein Vorschlag: Es misst die Inhalte nach und verteilt neu — und weil bei
+ * genau einer Position der Rumpf nur noch eine Zelle ueber alle Spalten
+ * enthaelt, richtete sich der Kopf dann nach den Ueberschriften und die Zeile
+ * nach ihrem Inhalt. Die Spalten standen sichtbar versetzt.
+ *
+ * Die Betragsspalten sind bewusst breit: Sie tragen `white-space: nowrap`, und
+ * was dort nicht hineinpasst, wird nicht umgebrochen, sondern laeuft heraus.
  */
 class LineItemsRenderer
 {
@@ -23,12 +29,12 @@ class LineItemsRenderer
      * @var list<array{key: string, label: string, width: string, align?: string, format?: string}>
      */
     public const DEFAULT_COLUMNS = [
-        ['key' => 'position', 'label' => 'Pos.', 'width' => '7%', 'align' => 'right'],
-        ['key' => 'description', 'label' => 'Bezeichnung', 'width' => '45%'],
-        ['key' => 'quantity', 'label' => 'Menge', 'width' => '10%', 'align' => 'right', 'format' => 'decimal'],
-        ['key' => 'unit', 'label' => 'Einheit', 'width' => '10%'],
-        ['key' => 'unit_price', 'label' => 'Einzelpreis', 'width' => '14%', 'align' => 'right', 'format' => 'currency'],
-        ['key' => 'total', 'label' => 'Gesamt', 'width' => '14%', 'align' => 'right', 'format' => 'currency'],
+        ['key' => 'position', 'label' => 'Pos.', 'width' => '6%', 'align' => 'right'],
+        ['key' => 'description', 'label' => 'Bezeichnung', 'width' => '46%'],
+        ['key' => 'quantity', 'label' => 'Menge', 'width' => '7%', 'align' => 'right', 'format' => 'decimal'],
+        ['key' => 'unit', 'label' => 'Einheit', 'width' => '7%'],
+        ['key' => 'unit_price', 'label' => 'Einzelpreis', 'width' => '17%', 'align' => 'right', 'format' => 'currency'],
+        ['key' => 'total', 'label' => 'Gesamt', 'width' => '17%', 'align' => 'right', 'format' => 'currency'],
     ];
 
     /**
@@ -54,7 +60,17 @@ class LineItemsRenderer
 
         foreach ($columns as $column) {
             $colgroup .= '<col style="width: '.$this->escape($column['width']).'">';
-            $head .= '<th class="db-align-'.$this->escape($column['align'] ?? 'left').'">'
+
+            // Die Breite steht ZUSAETZLICH an der Kopfzelle. Bei
+            // `table-layout: fixed` bestimmt die erste Zeile die Spalten, und
+            // DomPDF zieht dafuer die Zellen heran — die Angaben im <colgroup>
+            // allein liess es unbeachtet und verteilte nach der Breite der
+            // Ueberschriften. Die Bezeichnung bekam dadurch den Rest statt
+            // ihres Anteils und brach auf fuenf Zeilen um. Gemessen, nicht
+            // vermutet: mit Attribut am <col> aenderte sich nichts, mit der
+            // Angabe hier sofort.
+            $head .= '<th class="db-align-'.$this->escape($column['align'] ?? 'left').'"'
+                .' style="width: '.$this->escape($column['width']).'">'
                 .$this->escape($column['label'])
                 .'</th>';
         }
@@ -138,7 +154,15 @@ class LineItemsRenderer
                 $content .= '<span class="db-note">'.$this->escape($item->note).'</span>';
             }
 
-            $cells .= '<td class="db-align-'.$this->escape($column['align'] ?? 'left').'">'.$content.'</td>';
+            // Die Breite auch hier: Diese Zeile ist bei genau einer Position
+            // die ERSTE Zeile der verschachtelten Schlusstabelle, und bei
+            // `table-layout: fixed` bestimmt die erste Zeile die Spalten. Ohne
+            // die Angabe richtete sich der Kopf nach den Prozentwerten und die
+            // Zeile nach ihrem Inhalt — sichtbar versetzt.
+            $cells .= '<td class="db-align-'.$this->escape($column['align'] ?? 'left').'"'
+                .' style="width: '.$this->escape($column['width']).'">'
+                .$content
+                .'</td>';
         }
 
         return '<tr>'.$cells.'</tr>';
@@ -159,9 +183,15 @@ class LineItemsRenderer
         return match ($format) {
             'decimal' => $this->escape(number_format((float) $value, 2, $decimal, $thousands)),
             'integer' => $this->escape(number_format((float) $value, 0, $decimal, $thousands)),
+            // Geschuetztes Leerzeichen zwischen Zahl und Zeichen: Ein normales
+            // erlaubt den Umbruch, und „11.375,00" mit einem „€" auf der
+            // naechsten Zeile liest sich wie ein anderer Betrag. Das CSS im
+            // Preset setzt zusaetzlich `white-space: nowrap` — beides, weil das
+            // eine die Trennstelle beseitigt und das andere die Zelle
+            // zusammenhaelt, auch wenn die Spalte zu schmal geraten ist.
             'currency' => $this->escape(
                 number_format((float) $value, 2, $decimal, $thousands)
-                .' '.$this->currencySymbol((string) ($options['currency'] ?? 'EUR'))
+                ."\u{00A0}".$this->currencySymbol((string) ($options['currency'] ?? 'EUR'))
             ),
             default => $this->escape((string) $value),
         };

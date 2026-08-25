@@ -21,6 +21,26 @@ it('emits flat CSS only', function (): void {
         ->and($css)->not->toContain('display: grid');
 });
 
+it('lets the column definition decide the header alignment', function (): void {
+    $css = (new Din5008Preset)->css(PageSetup::din5008());
+
+    // Der Kopf trug ein pauschales `text-align: left`, das die Ausrichtung aus
+    // der Spaltendefinition wegen hoeherer Spezifitaet schlug: Ueber einem
+    // rechtsbuendigen Betrag stand eine linksbuendige Ueberschrift. Die Vorgabe
+    // gehoert deshalb an die Tabelle, nicht an den Kopf.
+    expect($css)->not->toContain("thead th {\n            border-bottom: 0.4mm solid #1a1a1a;\n            padding: 1.5mm 1mm;\n            text-align: left;")
+        ->and($css)->toContain('table.db-line-items .db-align-right { text-align: right; }');
+});
+
+it('keeps an amount from breaking between number and currency symbol', function (): void {
+    $css = (new Din5008Preset)->css(PageSetup::din5008());
+
+    // Zweite Haelfte des Riegels — die erste ist das geschuetzte Leerzeichen im
+    // LineItemsRenderer. Das eine beseitigt die Trennstelle, das andere haelt
+    // die Zelle zusammen, wenn die Spalte zu schmal geraet.
+    expect($css)->toContain('white-space: nowrap');
+});
+
 it('keeps the totals block from being torn across a page break', function (): void {
     $css = (new Din5008Preset)->css(PageSetup::din5008());
 

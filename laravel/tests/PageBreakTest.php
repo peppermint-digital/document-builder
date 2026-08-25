@@ -82,9 +82,17 @@ it('never leaves the summary alone on the last sheet', function (int $count): vo
     // own: as a standalone block it moved whole and pulled no line item along.
     $result = renderPages($count);
 
+    // Gesucht wird EIN Wort, nicht die ganze Bezeichnung. Die Probe soll
+    // beantworten „steht eine Position auf der letzten Seite?" — mit dem
+    // vollen „Digitaldruck Bogenoffset" beantwortete sie zusaetzlich „und ist
+    // die Spalte breit genug, dass sie in eine Zeile passt?". Beim Umstellen
+    // auf `table-layout: fixed` schlug sie deshalb fehl, obwohl die Position
+    // sehr wohl unten stand: Die Bezeichnung war lediglich umgebrochen.
+    // „Digitaldruck" kommt nur in Positionszeilen vor und laesst sich nicht
+    // trennen.
     expect($result['pages'])->toBeGreaterThan(1)
         ->and($result['last'])->toContain('Gesamtbetrag')
-        ->and($result['last'])->toContain('Digitaldruck Bogenoffset');
+        ->and($result['last'])->toContain('Digitaldruck');
 })->with([40, 41, 60]);
 
 it('repeats the table header and the footer on the last sheet', function (): void {

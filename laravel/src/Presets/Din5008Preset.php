@@ -171,11 +171,18 @@ class Din5008Preset implements DocumentPreset
             width: 100%;
             border-collapse: collapse;
             margin-top: 6mm;
+            /* Ohne `fixed` sind die Breiten aus dem <colgroup> fuer DomPDF nur
+               ein Vorschlag: Es misst die Inhalte nach und verteilt neu. Bei
+               genau EINER Position — dem Normalfall einer Ticketrechnung —
+               steht im Rumpf nur noch eine Zelle ueber alle Spalten, weil die
+               letzte Positionszeile in die Schlusstabelle wandert. Die aeussere
+               Tabelle richtet sich dann nach den UEBERSCHRIFTEN, die innere nach
+               ihrem Inhalt, und die Spalten stehen sichtbar versetzt. */
+            table-layout: fixed;
         }
         table.db-line-items thead th {
             border-bottom: 0.4mm solid {$accent};
             padding: 1.5mm 1mm;
-            text-align: left;
             font-size: 9pt;
         }
         table.db-line-items tbody td {
@@ -194,9 +201,29 @@ class Din5008Preset implements DocumentPreset
             text-align: center;
             color: {$muted};
         }
+        /* Die Ausrichtung kommt aus der Spaltendefinition und gilt fuer Kopf
+           UND Zellen. Bis dahin trug `thead th` ein pauschales
+           `text-align: left`, das die Klasse hier wegen hoeherer Spezifitaet
+           schlug: Ueber rechtsbuendigen Betraegen stand eine linksbuendige
+           Ueberschrift, und die Spalte sah aus, als gehoere sie nicht dazu.
+           Deshalb steht die Vorgabe jetzt an der Tabelle statt am Kopf. */
+        table.db-line-items { text-align: left; }
+        table.db-line-items .db-align-left { text-align: left; }
+        table.db-line-items .db-align-right { text-align: right; }
+        table.db-line-items .db-align-center { text-align: center; }
         .db-align-left { text-align: left; }
         .db-align-right { text-align: right; }
         .db-align-center { text-align: center; }
+
+        /* Ein Betrag bricht nicht. Zwischen Zahl und Zeichen steht zwar ein
+           geschuetztes Leerzeichen, aber DomPDF trennt eine Zelle notfalls
+           trotzdem — und „11.375,00" mit einem „€" auf der Zeile darunter ist
+           kein Schoenheitsfehler, sondern liest sich wie ein anderer Betrag. */
+        table.db-line-items td.db-align-right,
+        table.db-closing td.db-align-right,
+        table.db-totals .db-total-amount {
+            white-space: nowrap;
+        }
 
         /* Summary rows living inside the item table — the default, because a
            standalone block lands alone on an empty last sheet whenever it does
@@ -210,6 +237,7 @@ class Din5008Preset implements DocumentPreset
             width: 100%;
             border-collapse: collapse;
             page-break-inside: avoid;
+            table-layout: fixed;
         }
         table.db-closing td {
             padding: 1.5mm 1mm;

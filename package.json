@@ -1,6 +1,6 @@
 {
   "name": "@peppermint-digital/document-builder",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "A drag & drop builder for print-ready business documents and cards in React and Vue, built on GrapesJS. Ships a DIN 5008 preset and a card preset, both rendering faithfully through DomPDF.",
   "exports": {
     "./core": {
