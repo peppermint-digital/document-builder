@@ -150,8 +150,15 @@ class LineItemsRenderer
 
             // The note rides along under the description rather than claiming a
             // column of its own — that is where a reader expects it.
+            //
+            // Zeilenumbrueche bleiben Zeilenumbrueche. Die Notiz traegt in der
+            // Praxis eine Aufzaehlung — Artikelnummer, Farbe, Groessenaufteilung
+            // je Zeile —, und ohne diesen Schritt lief sie zu einem Fliesstext
+            // zusammen, in dem „100 x Groesse S" und „100 x Groesse M"
+            // nebeneinander standen. Auf dem Papier war das nicht mehr
+            // auseinanderzuhalten.
             if ($column['key'] === 'description' && $item->note !== null && $item->note !== '') {
-                $content .= '<span class="db-note">'.$this->escape($item->note).'</span>';
+                $content .= '<span class="db-note">'.nl2br($this->escape($item->note), false).'</span>';
             }
 
             // Die Breite auch hier: Diese Zeile ist bei genau einer Position

@@ -72,6 +72,45 @@ it('renders the note under the description rather than in its own column', funct
     expect($html)->toContain('Digitaldruck<span class="db-note">135 g/m² matt</span>');
 });
 
+it('keeps the line breaks inside a note', function (): void {
+    // Die Notiz traegt in der Praxis eine Aufzaehlung — Artikelnummer, Farbe,
+    // Groessenaufteilung je Zeile. Ohne <br> lief sie zu einem Fliesstext
+    // zusammen, in dem „100 x Groesse S" und „100 x Groesse M" nebeneinander
+    // standen und nicht mehr auseinanderzuhalten waren.
+    $html = (new LineItemsRenderer)->render([
+        LineItem::fromArray([
+            'position' => '1',
+            'description' => 'T-Shirt',
+            'note' => "Art.-Nr.: F140\n100 x Größe S\n100 x Größe M",
+        ]),
+    ]);
+
+    // nl2br ERSETZT den Umbruch nicht, es stellt das <br> davor — im Markup
+    // steht also "<br>\n". Fuer die Darstellung ist der rohe Umbruch danach
+    // nur Leerraum; geprueft wird deshalb das Tag, nicht die genaue Folge.
+    expect($html)->toContain('Art.-Nr.: F140<br>')
+        ->and($html)->toContain('100 x Größe S<br>')
+        ->and(substr_count($html, '<br>'))->toBe(2)
+        // XHTML-Schreibweise waere ebenfalls gueltig, aber DomPDF bekommt hier
+        // bewusst dasselbe Markup wie der Rest des Dokuments.
+        ->and($html)->not->toContain('<br />');
+});
+
+it('still escapes a note that contains markup', function (): void {
+    // nl2br darf die Maskierung nicht aushebeln: Erst escapen, dann Umbrueche.
+    $html = (new LineItemsRenderer)->render([
+        LineItem::fromArray([
+            'position' => '1',
+            'description' => 'T-Shirt',
+            'note' => "<script>alert(1)</script>\nzweite Zeile",
+        ]),
+    ]);
+
+    expect($html)->not->toContain('<script>')
+        ->and($html)->toContain('&lt;script&gt;')
+        ->and($html)->toContain('<br>');
+});
+
 it('escapes customer data', function (): void {
     $html = (new LineItemsRenderer)->render([
         LineItem::fromArray([
