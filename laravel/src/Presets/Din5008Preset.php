@@ -291,6 +291,19 @@ class Din5008Preset implements DocumentPreset
         .db-footer td { vertical-align: top; }
 
         .db-page-break { page-break-before: always; }
+
+        /* Übertrag (#5039). Die Zeile traegt den Umbruch, nicht ein eigener
+           Block: Sie steht innerhalb der Positionstabelle, damit der
+           Tabellenkopf auf der Folgeseite weiterhin von <thead> kommt. */
+        tr.db-page-break-row { page-break-after: always; }
+        tr.db-page-break-row td { padding: 0; border: 0; height: 0; line-height: 0; }
+
+        tr.db-carry td {
+            border-top: 0.4pt solid #999;
+            font-weight: bold;
+            padding-top: 1.5mm;
+            padding-bottom: 1.5mm;
+        }
         CSS;
     }
 

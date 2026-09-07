@@ -7,11 +7,13 @@ use Peppermint\DocumentBuilder\Console\InstallCommand;
 use Peppermint\DocumentBuilder\Contracts\CodeRenderer;
 use Peppermint\DocumentBuilder\Contracts\DocumentPreset;
 use Peppermint\DocumentBuilder\Contracts\DocumentRenderer;
+use Peppermint\DocumentBuilder\Contracts\PageAnalyzer;
 use Peppermint\DocumentBuilder\Data\PageSetup;
 use Peppermint\DocumentBuilder\Presets\Din5008Preset;
 use Peppermint\DocumentBuilder\Renderers\BundledCodeRenderer;
 use Peppermint\DocumentBuilder\Renderers\DomPdfRenderer;
 use Peppermint\DocumentBuilder\Services\LineItemsRenderer;
+use Peppermint\DocumentBuilder\Services\PdftotextPageAnalyzer;
 use Peppermint\DocumentBuilder\Services\PlaceholderRenderer;
 use Peppermint\DocumentBuilder\Services\TotalsRenderer;
 
@@ -48,6 +50,13 @@ class DocumentBuilderServiceProvider extends ServiceProvider
 
         $this->app->singleton(PageSetup::class, fn (): PageSetup => PageSetup::fromArray(
             config('document-builder.page', []),
+        ));
+
+        // Der Übertrag braucht ein Werkzeug ausserhalb von PHP. Fehlt es,
+        // meldet der Analyzer das selbst und der Beleg entsteht ohne Übertrag —
+        // deshalb wird hier nichts geprüft, sondern nur verdrahtet.
+        $this->app->singleton(PageAnalyzer::class, fn (): PageAnalyzer => new PdftotextPageAnalyzer(
+            (string) config('document-builder.pdftotext', 'pdftotext'),
         ));
 
         $this->app->singleton(DocumentBuilder::class);

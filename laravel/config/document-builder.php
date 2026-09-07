@@ -88,4 +88,19 @@ return [
         'middleware' => ['web', 'auth'],
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | pdftotext
+    |--------------------------------------------------------------------------
+    |
+    | Wird nur für den Übertrag auf mehrseitigen Belegen gebraucht: Er verlangt
+    | die Seitenaufteilung, und die kennt erst das fertige PDF. Fehlt das
+    | Programm, entstehen die Belege wie bisher — nur eben ohne Übertrag.
+    |
+    | Gehört zu poppler-utils. Hier steht der Pfad, falls es nicht im PATH liegt.
+    |
+    */
+
+    'pdftotext' => env('DOCUMENT_BUILDER_PDFTOTEXT', 'pdftotext'),
+
 ];

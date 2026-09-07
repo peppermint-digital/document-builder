@@ -75,7 +75,29 @@ class LineItemsRenderer
                 .'</th>';
         }
 
-        $rows = array_map(fn (LineItem $item): string => $this->renderRow($item, $columns, $options), $items);
+        $rows = [];
+
+        // Der Übertrag (#5039): Wo eine Seite endet, steht die Summe bis dorthin
+        // — und oben auf der nächsten Seite noch einmal. Die Aufteilung kommt
+        // von aussen, weil nur das fertige PDF sie kennt; ohne sie bleibt die
+        // Schleife das, was sie vorher war.
+        $umbruchNach = $options['page_breaks'] ?? [];
+        $laufend = 0.0;
+        $letzterIndex = count($items) - 1;
+
+        foreach (array_values($items) as $index => $item) {
+            $rows[] = $this->renderRow($item, $columns, $options);
+            $laufend += (float) ($item->total ?? 0);
+
+            // Nach der letzten Zeile nie — dort folgt der Summenblock.
+            if ($index === $letzterIndex || ! in_array($index + 1, $umbruchNach, strict: true)) {
+                continue;
+            }
+
+            $rows[] = $this->carryRow('Übertrag', $laufend, $columns, $options, 'db-carry-end');
+            $rows[] = '<tr class="db-page-break-row"><td colspan="'.count($columns).'"></td></tr>';
+            $rows[] = $this->carryRow('Übertrag', $laufend, $columns, $options, 'db-carry-start');
+        }
 
         // Die letzte Positionszeile wandert in die Schlussgruppe, damit sie den
         // Summenblock nicht allein auf einer leeren Seite zurücklässt.
@@ -135,6 +157,25 @@ class LineItemsRenderer
         return '<tbody class="db-totals-rows"><tr><td class="db-closing-cell" colspan="'.$columnCount.'">'
             .'<table class="db-closing"><colgroup>'.$colgroup.'</colgroup><tbody>'.$html.'</tbody></table>'
             .'</td></tr></tbody>';
+    }
+
+    /**
+     * Eine Übertragszeile — dieselbe Spaltenbreite wie die Positionen, damit
+     * der Betrag unter der Gesamtspalte steht und nicht daneben.
+     *
+     * @param  list<array{key: string, label: string, width: string, align?: string, format?: string}>  $columns
+     * @param  array<string, mixed>  $options
+     */
+    private function carryRow(string $label, float $amount, array $columns, array $options, string $class): string
+    {
+        $spalten = count($columns);
+        $breite = $columns[$spalten - 1]['width'] ?? '17%';
+
+        return '<tr class="db-carry '.$this->escape($class).'">'
+            .'<td class="db-align-right" colspan="'.max($spalten - 1, 1).'">'.$this->escape($label).'</td>'
+            .'<td class="db-align-right" style="width: '.$this->escape($breite).'">'
+            .$this->formatValue($amount, 'currency', $options)
+            .'</td></tr>';
     }
 
     /**
