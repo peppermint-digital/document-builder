@@ -23,8 +23,30 @@ use Peppermint\DocumentBuilder\Data\PageSetup;
  */
 class Din5008Preset implements DocumentPreset
 {
-    /** Top edge of the address field, from the paper edge. */
-    private const ADDRESS_TOP = 45.0;
+    /**
+     * The two letter forms of DIN 5008, each as a closed set.
+     *
+     * They must be picked as a whole. Form A puts the address field at 27mm,
+     * for a sheet without a printed letterhead; form B at 45mm, leaving room
+     * for one. Everything else follows from that — including, and this is the
+     * point, where the sheet may be folded.
+     *
+     * Before this table the two halves came from different forms: the address
+     * field was form B (45mm) while the fold marks were form A (87/192mm). The
+     * first fold then ran 3mm above the bottom edge of the address field, so
+     * the crease went straight through the line carrying postcode and town —
+     * exactly the line that has to be readable through the envelope window.
+     * Nothing failed, nothing was logged; it only shows on folded paper.
+     *
+     * @var array<string, array{address_top: float, subject_top: float, fold_one: float, fold_two: float}>
+     */
+    private const FORMS = [
+        'a' => ['address_top' => 27.0, 'subject_top' => 80.4, 'fold_one' => 87.0, 'fold_two' => 192.0],
+        'b' => ['address_top' => 45.0, 'subject_top' => 98.4, 'fold_one' => 105.0, 'fold_two' => 210.0],
+    ];
+
+    /** Form B is the default: it is what a letterhead needs, and what was here before. */
+    private const DEFAULT_FORM = 'b';
 
     /** Left edge of the address field, from the paper edge. */
     private const ADDRESS_LEFT = 20.0;
@@ -41,14 +63,31 @@ class Din5008Preset implements DocumentPreset
 
     private const INFO_WIDTH = 75.0;
 
-    /** Top edge of the subject line. */
-    private const SUBJECT_TOP = 98.4;
-
-    private const FOLD_MARK_ONE = 87.0;
-
-    private const FOLD_MARK_TWO = 192.0;
-
     private const HOLE_MARK = 148.5;
+
+    /**
+     * The measurements of one form. Unknown names fall back to the default
+     * rather than throwing: a typo in a template setting must not stop an
+     * invoice from being printed.
+     *
+     * @param  array<string, mixed>  $options
+     * @return array{address_top: float, subject_top: float, fold_one: float, fold_two: float}
+     */
+    public static function form(array $options = []): array
+    {
+        $name = strtolower(trim((string) ($options['form'] ?? self::DEFAULT_FORM)));
+
+        return self::FORMS[$name] ?? self::FORMS[self::DEFAULT_FORM];
+    }
+
+    /**
+     * Height of the address field — supplementary zone plus address zone.
+     * Identical in both forms; only its top edge moves.
+     */
+    public static function addressHeight(): float
+    {
+        return self::ADDRESS_ZUSATZ_HEIGHT + self::ADDRESS_ZONE_HEIGHT;
+    }
 
     public function name(): string
     {
@@ -57,6 +96,8 @@ class Din5008Preset implements DocumentPreset
 
     public function css(PageSetup $page, array $options = []): string
     {
+        $form = self::form($options);
+
         $font = $this->escape((string) ($options['font_family'] ?? 'DejaVu Sans'));
         $size = (float) ($options['font_size'] ?? 10);
         $lineHeight = (float) ($options['line_height'] ?? 1.35);
@@ -64,14 +105,14 @@ class Din5008Preset implements DocumentPreset
         $accent = $this->escape((string) ($options['accent_color'] ?? '#1a1a1a'));
         $muted = $this->escape((string) ($options['muted_color'] ?? '#666666'));
 
-        $addressTop = $page->fromPaperTop(self::ADDRESS_TOP);
+        $addressTop = $page->fromPaperTop($form['address_top']);
         $addressLeft = $page->fromPaperLeft(self::ADDRESS_LEFT);
         $infoLeft = $page->fromPaperLeft(self::INFO_LEFT);
-        $subjectTop = $page->fromPaperTop(self::SUBJECT_TOP);
+        $subjectTop = $page->fromPaperTop($form['subject_top']);
 
         $markLeft = $page->fromPaperLeft(3.0);
-        $foldOne = $page->fromPaperTop(self::FOLD_MARK_ONE);
-        $foldTwo = $page->fromPaperTop(self::FOLD_MARK_TWO);
+        $foldOne = $page->fromPaperTop($form['fold_one']);
+        $foldTwo = $page->fromPaperTop($form['fold_two']);
         $hole = $page->fromPaperTop(self::HOLE_MARK);
 
         $footerHeight = (float) ($options['footer_height'] ?? 18);
@@ -82,7 +123,7 @@ class Din5008Preset implements DocumentPreset
             : 'none';
 
         $addressWidth = self::ADDRESS_WIDTH;
-        $addressHeight = self::ADDRESS_ZUSATZ_HEIGHT + self::ADDRESS_ZONE_HEIGHT;
+        $addressHeight = self::addressHeight();
         $zusatzHeight = self::ADDRESS_ZUSATZ_HEIGHT;
         $zoneHeight = self::ADDRESS_ZONE_HEIGHT;
         $infoWidth = self::INFO_WIDTH;

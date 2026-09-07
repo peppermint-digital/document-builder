@@ -106,3 +106,63 @@ it('emits no stray newline when the application supplies no CSS', function (): v
 
     expect($html)->not->toContain("\n</style>");
 });
+
+/**
+ * Der Waechter. Diese Regel ist der ganze Grund, warum die Masse als geschlossene
+ * Formen und nicht als lose Konstanten dastehen.
+ *
+ * Vorher trug das Skelett das Anschriftfeld der Form B (45mm) und die Falzmarken
+ * der Form A (87/192mm). Der erste Falz lag damit 3mm oberhalb der Unterkante des
+ * Anschriftfelds — der Knick lief durch die Zeile mit Postleitzahl und Ort, also
+ * durch genau die Zeile, die im Fensterumschlag lesbar sein muss. Kein Fehler,
+ * kein Log: Das sieht man erst auf gefaltetem Papier.
+ */
+it('never places a fold mark inside the address field', function (string $form): void {
+    $masse = Din5008Preset::form(['form' => $form]);
+
+    $oben = $masse['address_top'];
+    $unten = $oben + Din5008Preset::addressHeight();
+
+    foreach (['fold_one', 'fold_two'] as $marke) {
+        expect($masse[$marke])->not->toBeBetween(
+            $oben,
+            $unten,
+            "Falzmarke {$marke} der Form {$form} liegt im Anschriftfeld ({$oben}mm–{$unten}mm).",
+        );
+    }
+})->with(['a', 'b']);
+
+it('keeps every fold panel short enough for a DIN lang envelope', function (string $form): void {
+    $masse = Din5008Preset::form(['form' => $form]);
+
+    // A4 ist 297mm hoch, der Innenraum eines DIN-lang-Umschlags rund 110mm.
+    $panels = [$masse['fold_one'], $masse['fold_two'] - $masse['fold_one'], 297.0 - $masse['fold_two']];
+
+    foreach ($panels as $hoehe) {
+        expect($hoehe)->toBeLessThanOrEqual(110.0)->and($hoehe)->toBeGreaterThan(0.0);
+    }
+})->with(['a', 'b']);
+
+it('shifts the subject line by the same amount as the address field', function (): void {
+    $a = Din5008Preset::form(['form' => 'a']);
+    $b = Din5008Preset::form(['form' => 'b']);
+
+    // Beide Formen unterscheiden sich nur darin, wie viel Platz oben fuer den
+    // Briefkopf bleibt. Verschoebe sich der Betreff um einen anderen Betrag als
+    // das Anschriftfeld, liefe er in den Infoblock daneben.
+    expect($b['subject_top'] - $a['subject_top'])->toBe($b['address_top'] - $a['address_top']);
+});
+
+it('falls back to the default form instead of throwing on an unknown name', function (): void {
+    // Ein Tippfehler in einer Vorlagen-Einstellung darf keine Rechnung aufhalten.
+    expect(Din5008Preset::form(['form' => 'gibt-es-nicht']))->toBe(Din5008Preset::form([]));
+});
+
+it('draws the fold marks of the requested form', function (): void {
+    $a = (new Din5008Preset)->css(PageSetup::din5008(), ['form' => 'a']);
+    $b = (new Din5008Preset)->css(PageSetup::din5008(), ['form' => 'b']);
+
+    // 87mm und 105mm von der Papierkante, umgerechnet auf die Inhaltsbox (16.9mm oben).
+    expect($a)->toContain('top: 70.1mm')
+        ->and($b)->toContain('top: 88.1mm');
+});
