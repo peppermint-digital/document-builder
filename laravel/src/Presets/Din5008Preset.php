@@ -307,6 +307,29 @@ class Din5008Preset implements DocumentPreset
         CSS;
     }
 
+    /**
+     * Application-supplied CSS, appended after the skeleton's own.
+     *
+     * The escape hatch for everything the option tokens above cannot express —
+     * a different table look, typography for the host application's own body
+     * classes. It comes last so it wins on equal specificity, and it is the
+     * only place where a host can reach the stylesheet at all: the free zones
+     * carry markup, not rules.
+     *
+     * Deliberately not escaped. This is a stylesheet, not a value, and it
+     * comes from the host application rather than from user input — escaping
+     * it would only break selectors like `td > span`. A host that lets end
+     * users type CSS must sanitise it before handing it over.
+     *
+     * @param  array<string, mixed>  $options
+     */
+    private function extraCss(array $options): string
+    {
+        $css = (string) ($options['extra_css'] ?? '');
+
+        return trim($css) === '' ? '' : "\n".$css;
+    }
+
     public function render(DocumentPayload $data, string $body, PageSetup $page, array $options = []): string
     {
         // Der Vertrag sichert nur den gemeinsamen Teil zu — Art und
@@ -344,7 +367,7 @@ class Din5008Preset implements DocumentPreset
 
         return '<!DOCTYPE html>'
             .'<html lang="'.$lang.'">'
-            .'<head><meta charset="UTF-8"><style>'.$this->css($page, $options).'</style></head>'
+            .'<head><meta charset="UTF-8"><style>'.$this->css($page, $options).$this->extraCss($options).'</style></head>'
             .'<body>'.implode('', array_filter($parts)).'</body>'
             .'</html>';
     }

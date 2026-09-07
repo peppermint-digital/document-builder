@@ -81,3 +81,28 @@ it('falls back to the sender block so a document is never printed without its de
     expect($html)->toContain('class="db-footer"')
         ->and($html)->toContain('Peppermint Digital GmbH');
 });
+
+it('appends application CSS after its own so the host can win on equal specificity', function (): void {
+    $html = (new Din5008Preset)->render(
+        offer(),
+        '<p class="beleg-anrede">Guten Tag,</p>',
+        PageSetup::din5008(),
+        ['extra_css' => '.beleg-anrede { margin-bottom: 6mm; }'],
+    );
+
+    $skelett = strpos($html, 'table.db-line-items');
+    $eigenes = strpos($html, '.beleg-anrede { margin-bottom: 6mm; }');
+
+    // Die Reihenfolge IST die Zusicherung: Bei gleicher Spezifitaet gewinnt in
+    // CSS die spaetere Regel. Stuende das Anwendungs-CSS davor, waere jede
+    // Ueberschreibung wirkungslos — und zwar lautlos.
+    expect($eigenes)->not->toBeFalse()
+        ->and($eigenes)->toBeGreaterThan($skelett)
+        ->and($html)->toContain('</style>');
+});
+
+it('emits no stray newline when the application supplies no CSS', function (): void {
+    $html = (new Din5008Preset)->render(offer(), '<p>x</p>', PageSetup::din5008(), []);
+
+    expect($html)->not->toContain("\n</style>");
+});
