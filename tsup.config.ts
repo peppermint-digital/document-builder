@@ -9,5 +9,5 @@ export default defineConfig({
     dts: true,
     clean: true,
     sourcemap: true,
-    external: ['react', 'react-dom', 'vue', 'grapesjs'],
+    external: ['react', 'react-dom', 'grapesjs'],
 });
