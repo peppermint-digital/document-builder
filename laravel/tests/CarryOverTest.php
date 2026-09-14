@@ -241,9 +241,31 @@ describe('die Vorgabe für den zweiten Lauf', function (): void {
         $mit = builderMit(messenderAnalyzer($messung))->pdf(
             $daten, '{{ line_items }}', null, ['carry_over' => true]
         );
-        $ohne = builderMit(messenderAnalyzer($messung))->pdf($daten, '{{ line_items }}');
 
-        expect(seitenzahl($mit))->toBe(seitenzahl($ohne));
+        // Gemessen waren drei Seiten; mehr als eine zusaetzliche darf der
+        // Uebertrag nie kosten. Ohne den Riegel entstanden hier zehn.
+        expect(seitenzahl($mit))->toBeLessThanOrEqual(4);
+    });
+
+    it('nimmt die dichte Aufteilung, wenn der Übertrag noch auf die Seite passt', function (): void {
+        // Der Fall, den der Nutzer am 14.09.2026 am fertigen Beleg gesehen hat:
+        // „Nach unten ist ja noch Weissraum." Die Reserve rechnet in ganzen
+        // Positionszeilen, die Uebertragszeile ist aber einzeilig — bei hohen
+        // Zeilen verschenkt das sichtbar Platz.
+        //
+        // Gemessen: drei Zeilen auf Seite 1, die vierte auf Seite 2. Passt der
+        // Uebertrag zusaetzlich auf Seite 1, bleibt es bei dieser Aufteilung.
+        $daten = DocumentData::fromArray(['type' => 'invoice', 'line_items' => zeilen(4)]);
+        $bauer = builderMit(messenderAnalyzer(['1' => 1, '2' => 1, '3' => 1, '4' => 2]));
+
+        $pdf = $bauer->pdf($daten, '{{ line_items }}', null, ['carry_over' => true]);
+
+        // Am fertigen PDF gemessen, nicht an der Vorgabe: Position 3 steht
+        // weiterhin auf Seite 1. Mit der vorsichtigen Reserve waere sie auf
+        // Seite 2 gewandert.
+        expect((new PdftotextPageAnalyzer)->pagesByPosition($pdf, ['1', '2', '3', '4']))
+            ->toBe(['1' => 1, '2' => 1, '3' => 1, '4' => 2])
+            ->and(seitenzahl($pdf))->toBe(2);
     });
 
     it('setzt den Übertrag weiter, wo eine Folgeseite gemessen wurde', function (): void {

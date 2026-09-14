@@ -158,46 +158,70 @@ class DocumentBuilder
             return $pdf;
         }
 
-        // Wo sie im zweiten Lauf enden SOLLEN.
-        $umbrueche = $this->umbruecheMitReserve($grenzen, count($positionen));
-
-        if ($umbrueche === []) {
-            return $pdf;
-        }
-
-        // Der Übertrag darf eine Seite kosten, nie mehr. Die Reserve rechnet in
-        // ganzen Positionszeilen, eine Übertragszeile ist aber einzeilig —
-        // trägt eine Position mehrere Zeilen Beschreibung, hält die Rechnung
-        // weit mehr Platz frei, als der Übertrag braucht. Das fällt nicht als
-        // Fehler auf, weil die Gegenprobe unten nur prüft, ob die Vorgabe
-        // HÄLT, nicht ob sie sinnvoll ist: Ein Beleg mit einer Position je
-        // Seite hält seine Vorgabe tadellos.
+        // Wo sie im zweiten Lauf enden SOLLEN — dichteste Vorgabe zuerst.
         //
-        // Deshalb hier die fachliche Grenze. Ein sauberer Beleg ohne Übertrag
-        // ist besser als ein aufgeblähter mit.
-        if (count($umbrueche) > count($grenzen) + 1) {
-            return $pdf;
-        }
-
-        $zweiter = $this->renderer->render(
-            $this->html($data, $body, $page, ['page_breaks' => $umbrueche] + $options),
-            $page,
-        );
-
-        // Die Gegenprobe: Halten die vorgegebenen Umbrüche? Läuft eine Seite
-        // trotz der zurückgehaltenen Zeile über, bricht DomPDF zusätzlich um —
-        // dann stünde ein Übertrag mitten auf der Seite.
+        // Die erste ist die MESSUNG selbst, ganz ohne Reserve. Das ist keine
+        // Nachlässigkeit, sondern der Regelfall bei langen Beschreibungen: Die
+        // Reserve rechnet in ganzen Positionszeilen, eine Übertragszeile ist
+        // aber einzeilig. Trägt eine Position sechs Zeilen Text, hält die
+        // Rechnung das Sechsfache dessen frei, was der Übertrag braucht — und
+        // unten auf der Seite bleibt sichtbar Weißraum.
         //
-        // Verglichen wird die MESSUNG des zweiten Laufs mit der VORGABE, nicht
-        // Vorgabe mit Vorgabe: Die Reduktion um eine Zeile darf nur einmal
-        // stattfinden, sonst kann die Probe nie zutreffen.
-        $kontrolle = $this->pageAnalyzer->pagesByPosition($zweiter, $positionen);
+        // Ob die dichte Vorgabe trägt, weiß nur das Papier. Deshalb wird sie
+        // gedruckt und gemessen; hält sie nicht, kommt die vorsichtige dran.
+        foreach ($this->kandidaten($grenzen, count($positionen)) as $umbrueche) {
+            $zweiter = $this->renderer->render(
+                $this->html($data, $body, $page, ['page_breaks' => $umbrueche] + $options),
+                $page,
+            );
 
-        if ($kontrolle === null || $this->seitengrenzen($kontrolle, $positionen) !== $umbrueche) {
-            return $pdf;
+            // Die Gegenprobe: Halten die vorgegebenen Umbrüche? Läuft eine
+            // Seite über, bricht DomPDF zusätzlich um — dann stünde ein
+            // Übertrag mitten auf der Seite.
+            //
+            // Verglichen wird die MESSUNG des zweiten Laufs mit der VORGABE,
+            // nicht Vorgabe mit Vorgabe: Die Reduktion um eine Zeile darf nur
+            // einmal stattfinden, sonst kann die Probe nie zutreffen.
+            $kontrolle = $this->pageAnalyzer->pagesByPosition($zweiter, $positionen);
+
+            if ($kontrolle !== null && $this->seitengrenzen($kontrolle, $positionen) === $umbrueche) {
+                return $zweiter;
+            }
         }
 
-        return $zweiter;
+        return $pdf;
+    }
+
+    /**
+     * Die Vorgaben, die für den zweiten Lauf in Frage kommen — dichteste zuerst.
+     *
+     * Zwei Stück: die gemessenen Grenzen unverändert, und dieselben mit Platz
+     * für die Übertragszeilen. Die erste geht auf, wenn die Zeilen hoch sind
+     * und der Übertrag in den Rest der Seite passt; die zweite ist der
+     * Rückfall, wenn er es nicht tut.
+     *
+     * @param  list<int>  $grenzen
+     * @return list<list<int>>
+     */
+    private function kandidaten(array $grenzen, int $zeilen): array
+    {
+        $kandidaten = [];
+
+        foreach ([$grenzen, $this->umbruecheMitReserve($grenzen, $zeilen)] as $vorgabe) {
+            // Der Übertrag darf eine Seite kosten, nie mehr. Das fällt nicht
+            // als Fehler auf, weil die Gegenprobe nur prüft, ob eine Vorgabe
+            // HÄLT, nicht ob sie sinnvoll ist: Ein Beleg mit einer Position je
+            // Seite hält seine Vorgabe tadellos. Er ist nur unbrauchbar.
+            if ($vorgabe === [] || count($vorgabe) > count($grenzen) + 1) {
+                continue;
+            }
+
+            if (! in_array($vorgabe, $kandidaten, true)) {
+                $kandidaten[] = $vorgabe;
+            }
+        }
+
+        return $kandidaten;
     }
 
     /**
