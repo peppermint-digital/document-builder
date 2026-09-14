@@ -7,6 +7,7 @@ use Peppermint\DocumentBuilder\DocumentBuilder;
 use Peppermint\DocumentBuilder\Presets\Din5008Preset;
 use Peppermint\DocumentBuilder\Renderers\DomPdfRenderer;
 use Peppermint\DocumentBuilder\Services\LineItemsRenderer;
+use Peppermint\DocumentBuilder\Services\PdftotextPageAnalyzer;
 use Peppermint\DocumentBuilder\Services\PlaceholderRenderer;
 use Peppermint\DocumentBuilder\Services\TotalsRenderer;
 
@@ -155,4 +156,115 @@ it('fragt ohne carry_over gar nicht erst nach der Aufteilung', function (): void
     builderMit($pruefer)->pdf($daten, '{{ line_items }}');
 
     expect($pruefer->aufrufe)->toBe(0);
+});
+
+/**
+ * Ein Analyzer, der den ERSTEN Aufruf (die Messung) vorgibt und ab dem zweiten
+ * — der Gegenprobe — am echten PDF misst.
+ *
+ * Ohne diese Trennung lässt sich der Weg nicht prüfen: Ein Analyzer, der immer
+ * dasselbe meldet, lässt die Gegenprobe Vorgabe gegen die ALTE Messung
+ * vergleichen. Sie schlägt dann auch dort fehl, wo der zweite Lauf genau das
+ * tut, was ihm gesagt wurde.
+ */
+function messenderAnalyzer(array $messung): PageAnalyzer
+{
+    return new class($messung) implements PageAnalyzer
+    {
+        public int $aufrufe = 0;
+
+        private readonly PdftotextPageAnalyzer $echt;
+
+        public function __construct(private readonly array $messung)
+        {
+            $this->echt = new PdftotextPageAnalyzer;
+        }
+
+        public function isAvailable(): bool
+        {
+            return true;
+        }
+
+        public function pagesByPosition(string $pdf, array $positions): ?array
+        {
+            return ++$this->aufrufe === 1
+                ? $this->messung
+                : $this->echt->pagesByPosition($pdf, $positions);
+        }
+    };
+}
+
+describe('die Vorgabe für den zweiten Lauf', function (): void {
+    beforeEach(function (): void {
+        if (trim((string) shell_exec('command -v pdftotext')) === '') {
+            test()->markTestSkipped('pdftotext (poppler-utils) nicht verfügbar.');
+        }
+    });
+
+    it('schreibt die enge erste Seite nicht auf die Folgeseiten fort', function (): void {
+        // Der Live-Fall ANG-2026-00031: vier Positionen, gemessen drei auf
+        // Seite 1 und eine auf Seite 2. Seite 1 ist eng, weil Briefkopf,
+        // Anschriftfeld und Anschreiben über der Tabelle stehen — die
+        // Folgeseite hat davon nichts.
+        //
+        // Vorher wurde die Kapazität von Seite 1 (drei Zeilen) für jede
+        // Folgeseite angenommen, davon zwei Zeilen Reserve abgezogen und so
+        // eine Position je Seite gedruckt: aus zwei Seiten wurden drei.
+        $daten = DocumentData::fromArray(['type' => 'invoice', 'line_items' => zeilen(4)]);
+        $bauer = builderMit(messenderAnalyzer(['1' => 1, '2' => 1, '3' => 1, '4' => 2]));
+
+        $pdf = $bauer->pdf($daten, '{{ line_items }}', null, ['carry_over' => true]);
+
+        // Genau ein Umbruch: Seite 1 gibt eine Zeile für ihren Übertrag ab,
+        // der Rest bleibt zusammen.
+        expect(seitenzahl($pdf))->toBe(2);
+    });
+
+    it('verwirft eine Vorgabe, die den Beleg um mehr als eine Seite verlängert', function (): void {
+        // Zwanzig Zeilen, gemessen auf drei Seiten. Die Reserve rechnet in
+        // ganzen Positionszeilen; bei vier Zeilen je Seite bleiben nach zwei
+        // Übertragszeilen nur zwei übrig — das ergäbe zehn Seiten.
+        //
+        // Die Gegenprobe allein fängt das nicht: So ein Beleg hält seine
+        // Vorgabe tadellos. Er ist nur unbrauchbar.
+        $daten = DocumentData::fromArray(['type' => 'invoice', 'line_items' => zeilen(20)]);
+        $messung = [];
+
+        foreach (range(1, 20) as $i) {
+            $messung[(string) $i] = match (true) {
+                $i <= 4 => 1,
+                $i <= 8 => 2,
+                default => 3,
+            };
+        }
+
+        $mit = builderMit(messenderAnalyzer($messung))->pdf(
+            $daten, '{{ line_items }}', null, ['carry_over' => true]
+        );
+        $ohne = builderMit(messenderAnalyzer($messung))->pdf($daten, '{{ line_items }}');
+
+        expect(seitenzahl($mit))->toBe(seitenzahl($ohne));
+    });
+
+    it('setzt den Übertrag weiter, wo eine Folgeseite gemessen wurde', function (): void {
+        // Die Zusage soll nicht dadurch eingehalten werden, dass es gar keinen
+        // Übertrag mehr gibt. Hier gibt es eine echte Folgeseite mit Platz:
+        // Seite 1 trägt gemessen 6 Zeilen, Seite 2 ebenfalls 6.
+        $daten = DocumentData::fromArray(['type' => 'invoice', 'line_items' => zeilen(14)]);
+        $messung = [];
+
+        foreach (range(1, 14) as $i) {
+            $messung[(string) $i] = match (true) {
+                $i <= 6 => 1,
+                $i <= 12 => 2,
+                default => 3,
+            };
+        }
+
+        $pruefer = messenderAnalyzer($messung);
+        $pdf = builderMit($pruefer)->pdf($daten, '{{ line_items }}', null, ['carry_over' => true]);
+
+        // Zwei Aufrufe heißt: gemessen, vorgegeben, gegengeprüft.
+        expect($pruefer->aufrufe)->toBe(2);
+    });
 });

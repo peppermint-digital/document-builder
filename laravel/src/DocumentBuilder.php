@@ -165,6 +165,20 @@ class DocumentBuilder
             return $pdf;
         }
 
+        // Der Übertrag darf eine Seite kosten, nie mehr. Die Reserve rechnet in
+        // ganzen Positionszeilen, eine Übertragszeile ist aber einzeilig —
+        // trägt eine Position mehrere Zeilen Beschreibung, hält die Rechnung
+        // weit mehr Platz frei, als der Übertrag braucht. Das fällt nicht als
+        // Fehler auf, weil die Gegenprobe unten nur prüft, ob die Vorgabe
+        // HÄLT, nicht ob sie sinnvoll ist: Ein Beleg mit einer Position je
+        // Seite hält seine Vorgabe tadellos.
+        //
+        // Deshalb hier die fachliche Grenze. Ein sauberer Beleg ohne Übertrag
+        // ist besser als ein aufgeblähter mit.
+        if (count($umbrueche) > count($grenzen) + 1) {
+            return $pdf;
+        }
+
         $zweiter = $this->renderer->render(
             $this->html($data, $body, $page, ['page_breaks' => $umbrueche] + $options),
             $page,
@@ -212,7 +226,20 @@ class DocumentBuilder
 
         // Die Kapazität einer Folgeseite — sie gilt auch für die Seiten, die
         // durch das Zurückhalten überhaupt erst entstehen.
-        $folgeseite = count($kapazitaeten) > 1 ? $kapazitaeten[1] : $kapazitaeten[0];
+        //
+        // Sie darf NUR aus einer Folgeseite kommen. Seite 1 ist die einzige,
+        // deren Kapazität nichts über die übrigen aussagt: Briefkopf,
+        // Anschriftfeld, Betreff und Anschreiben stehen über der Tabelle und
+        // nehmen ihr den halben Bogen. Wer sie fortschreibt, hält jede
+        // Folgeseite für genauso eng — und zieht davon auch noch zwei Zeilen
+        // Reserve ab.
+        //
+        // Beim zweiseitigen Beleg gibt es keine gemessene Folgeseite. Dann
+        // wird auch keine erfunden: Die erste Grenze bekommt ihre Reserve, der
+        // Rest fließt auf die letzte Seite, und die Gegenprobe entscheidet, ob
+        // das aufgeht. Vorher lief genau dieser Fall auf „drei Zeilen minus
+        // zwei" hinaus — eine Position je Seite (ANG-2026-00031).
+        $folgeseite = $kapazitaeten[1] ?? null;
 
         $umbrueche = [];
         $gesetzt = 0;
@@ -225,6 +252,14 @@ class DocumentBuilder
         // Der Übertrag kostet Platz, und Platz kostet am Ende eine Seite mehr.
         while ($gesetzt < $zeilen) {
             $kapazitaet = $kapazitaeten[$nummer] ?? $folgeseite;
+
+            // Über die gemessenen Seiten hinaus, ohne zu wissen, wie viel eine
+            // Folgeseite trägt: Hier hört das Vorgeben auf. Der Rest bleibt
+            // zusammen und landet auf der letzten Seite — ob er dort hinpasst,
+            // beantwortet die Gegenprobe am fertigen PDF, nicht eine Schätzung.
+            if ($kapazitaet === null) {
+                break;
+            }
 
             // Erste Seite: nur der Übertrag am Fuß. Ab der zweiten kommt der
             // am Kopf dazu.
