@@ -290,3 +290,55 @@ describe('die Vorgabe für den zweiten Lauf', function (): void {
         expect($pruefer->aufrufe)->toBe(2);
     });
 });
+
+it('verwirft eine Aufteilung, die eine leere Seite erzeugt', function (): void {
+    // RE-2026-00019, Seite 3: Die vorgegebene Grenze lag so knapp am
+    // Seitenende, dass die Übertragszeile nicht mehr daraufpasste. DomPDF
+    // schob sie auf die nächste Seite, dort griff unmittelbar der erzwungene
+    // Umbruch — heraus kam eine Seite, auf der nichts stand als „Übertrag".
+    //
+    // Für die alte Gegenprobe war das in Ordnung: Die Positionen lagen vor und
+    // hinter der Grenze wie vorgegeben. Dass zwischen ihnen eine leere Seite
+    // lag, sah sie nicht, denn sie merkte sich nur, WO eine Seite endet, nicht
+    // auf welcher Nummer.
+    $daten = DocumentData::fromArray(['type' => 'invoice', 'line_items' => zeilen(6)]);
+
+    // Erste Messung: Umbruch nach Zeile 3. Die Gegenprobe meldet dieselbe
+    // Grenze — aber die Zeilen 4 bis 6 stehen auf Seite 3 statt auf Seite 2.
+    $springend = new class implements PageAnalyzer
+    {
+        public int $aufrufe = 0;
+
+        public function isAvailable(): bool
+        {
+            return true;
+        }
+
+        public function pagesByPosition(string $pdf, array $positions): ?array
+        {
+            $this->aufrufe++;
+
+            return $this->aufrufe === 1
+                ? ['1' => 1, '2' => 1, '3' => 1, '4' => 2, '5' => 2, '6' => 2]
+                : ['1' => 1, '2' => 1, '3' => 1, '4' => 3, '5' => 3, '6' => 3];
+        }
+    };
+
+    $pdf = builderMit($springend)->pdf($daten, '{{ line_items }}', null, ['carry_over' => true]);
+
+    // Kein Übertrag ist besser als ein Beleg mit einer leeren Seite in der
+    // Mitte: Der Übertrag ist eine Zugabe, er darf einen Beleg nie schlechter
+    // machen als ohne ihn.
+    expect($pdf)->toStartWith('%PDF-');
+    expect($springend->aufrufe)->toBeGreaterThan(1);
+});
+
+it('nimmt eine Aufteilung an, deren Seiten aufeinander folgen', function (): void {
+    $daten = DocumentData::fromArray(['type' => 'invoice', 'line_items' => zeilen(6)]);
+    $pruefer = analyzer(['1' => 1, '2' => 1, '3' => 1, '4' => 2, '5' => 2, '6' => 2]);
+
+    $pdf = builderMit($pruefer)->pdf($daten, '{{ line_items }}', null, ['carry_over' => true]);
+
+    expect($pdf)->toStartWith('%PDF-')
+        ->and($pruefer->aufrufe)->toBeGreaterThan(1);
+});

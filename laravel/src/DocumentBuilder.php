@@ -184,7 +184,9 @@ class DocumentBuilder
             // einmal stattfinden, sonst kann die Probe nie zutreffen.
             $kontrolle = $this->pageAnalyzer->pagesByPosition($zweiter, $positionen);
 
-            if ($kontrolle !== null && $this->seitengrenzen($kontrolle, $positionen) === $umbrueche) {
+            if ($kontrolle !== null
+                && $this->seitengrenzen($kontrolle, $positionen) === $umbrueche
+                && $this->ohneLeereSeite($kontrolle, $positionen)) {
                 return $zweiter;
             }
         }
@@ -343,6 +345,47 @@ class DocumentBuilder
         }
 
         return $grenzen;
+    }
+
+    /**
+     * Springt die Aufteilung über eine Seite hinweg?
+     *
+     * {@see self::seitengrenzen()} merkt sich, WO eine Seite endet, nicht auf
+     * welcher Nummer. Beides ist dasselbe, solange die Seiten aufeinander
+     * folgen — und genau das tun sie nicht immer.
+     *
+     * Der Fall, an dem es auffiel (RE-2026-00019, Seite 3): Die vorgegebene
+     * Grenze liegt so knapp am Seitenende, dass die Übertragszeile nicht mehr
+     * darauf passt. DomPDF schiebt sie auf die nächste Seite, dort greift
+     * unmittelbar der erzwungene Umbruch — und heraus kommt eine Seite, auf
+     * der nichts steht als „Übertrag". Für die Gegenprobe war alles in
+     * Ordnung: Die Positionen lagen vor und hinter der Grenze wie vorgegeben.
+     * Dass zwischen ihnen eine leere Seite lag, sah sie nicht.
+     *
+     * @param  array<string, int>  $seiten
+     * @param  list<string>  $positionen
+     */
+    private function ohneLeereSeite(array $seiten, array $positionen): bool
+    {
+        $vorherige = null;
+
+        foreach ($positionen as $position) {
+            $seite = $seiten[$position] ?? null;
+
+            if ($seite === null) {
+                return false;
+            }
+
+            // Ein Sprung um mehr als eins heisst: dazwischen liegt eine Seite,
+            // die keine einzige Position traegt.
+            if ($vorherige !== null && $seite > $vorherige + 1) {
+                return false;
+            }
+
+            $vorherige = $seite;
+        }
+
+        return true;
     }
 
     /**
