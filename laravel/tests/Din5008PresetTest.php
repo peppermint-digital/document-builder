@@ -1,6 +1,8 @@
 <?php
 
+use Peppermint\DocumentBuilder\Data\DocumentData;
 use Peppermint\DocumentBuilder\Data\PageSetup;
+use Peppermint\DocumentBuilder\Data\Party;
 use Peppermint\DocumentBuilder\Presets\Din5008Preset;
 
 it('places the address field and subject line at the DIN offsets', function (): void {
@@ -181,8 +183,7 @@ it('divides the address field by need instead of by a fixed key', function (): v
     $css = (new Din5008Preset)->css(PageSetup::din5008());
 
     expect($css)->not->toContain('.db-address-zone { height:')
-        ->and($css)->toMatch('/\.db-address-supplement \{[^}]*min-height:/')
-        ->and($css)->not->toMatch('/\.db-address-supplement \{[^}]*[^n-]height: [\d.]+mm/');
+        ->and($css)->not->toMatch('/\.db-address-supplement \{[^}]*height: [\d.]+mm/');
 });
 
 it('anchors the address block at the bottom of the field so it grows upwards', function (): void {
@@ -190,8 +191,29 @@ it('anchors the address block at the bottom of the field so it grows upwards', f
     // unten, wo die Betreffzeile steht.
     $css = (new Din5008Preset)->css(PageSetup::din5008());
 
-    expect($css)->toMatch('/\.db-address-zone \{[^}]*bottom: 0;/')
-        ->and($css)->toMatch('/\.db-address-supplement \{[^}]*top: 0;/');
+    expect($css)->toMatch('/\.db-address-block \{[^}]*bottom: 0;/');
+});
+
+it('keeps the return line directly above the recipient', function (): void {
+    // Beide stehen in EINEM Block, die Ruecksendeangabe zuerst und nur durch
+    // einen knappen Abstand getrennt. Sie sass frueher oben am Feldrand,
+    // waehrend die Anschrift auf fester Hoehe darunter begann — dazwischen
+    // klaffte der ungenutzte Rest der Zusatzzone.
+    $preset = new Din5008Preset;
+    $daten = new DocumentData(
+        type: 'invoice',
+        sender: new Party('Absender GmbH'),
+        recipient: new Party('Empfaenger GmbH', ['Weg 1', '30159 Hannover'], note: 'Absender GmbH · Weg 2 · 30159 Hannover'),
+    );
+
+    $html = $preset->render($daten, '<p>x</p>', PageSetup::din5008());
+
+    expect($html)->toContain('<div class="db-address"><div class="db-address-block">')
+        ->and($html)->toMatch('/db-address-supplement.*db-address-zone/s');
+
+    $css = $preset->css(PageSetup::din5008());
+
+    expect($css)->toMatch('/\.db-address-supplement \{[^}]*padding-bottom: [\d.]+mm;/');
 });
 
 it('keeps the address field itself at its DIN measurements', function (): void {

@@ -128,7 +128,10 @@ class Din5008Preset implements DocumentPreset
         // MINDESTHOEHE. Frueher war es eine feste Hoehe, und weil darunter
         // eine ebenso feste Anschriftzone sass, war das 45-mm-Feld starr
         // 17,7 / 27,3 geteilt — auch wenn oben nur eine Ruecksendezeile stand.
-        $zusatzMin = min(self::ADDRESS_ZUSATZ_HEIGHT, 8.0);
+        // Ein knapper Abstand trennt die Ruecksendeangabe vom Empfaenger,
+        // mehr braucht es nicht: Was von der Zusatzzone uebrig bleibt, steht
+        // als Weissraum darueber und nicht als Loch dazwischen.
+        $zusatzAbstand = 2.0;
 
         // Der Zeilenabstand der Anschriftzone in Millimetern, damit genau
         // sechs Zeilen hineinpassen — unabhaengig davon, was die Vorlage fuer
@@ -189,20 +192,16 @@ class Din5008Preset implements DocumentPreset
            festem Schlüssel: Ruecksendeangabe oben, Anschrift am unteren Rand
            verankert. Sie waechst damit nach OBEN in den Platz hinein, den die
            fast immer leere Zusatzzone nicht braucht. */
-        .db-address-supplement {
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            min-height: {$zusatzMin}mm;
-            font-size: 7pt;
-            color: {$muted};
-        }
-        .db-address-zone {
+        .db-address-block {
             position: absolute;
             bottom: 0;
             left: 0;
             right: 0;
+        }
+        .db-address-supplement {
+            padding-bottom: {$zusatzAbstand}mm;
+            font-size: 6pt;
+            color: {$muted};
         }
 
         /* Information block, top edge flush with the address field. */
@@ -528,10 +527,16 @@ class Din5008Preset implements DocumentPreset
             ? $this->escape($data->recipient->note)
             : '';
 
-        return '<div class="db-address">'
+        // Ruecksendeangabe und Anschrift stehen in EINEM Block, der unten im
+        // Feld haengt. Sie gehoeren zusammen — die kleine Zeile ist die
+        // Absenderangabe fuers Fensterkuvert und steht unmittelbar ueber dem
+        // Empfaenger. Frueher sass sie oben am Feldrand, die Anschrift darunter
+        // auf fester Hoehe; dazwischen klaffte der ungenutzte Rest der
+        // Zusatzzone.
+        return '<div class="db-address"><div class="db-address-block">'
             .'<div class="db-address-supplement">'.$supplement.'</div>'
             .'<div class="db-address-zone">'.implode('<br>', $lines).'</div>'
-            .'</div>';
+            .'</div></div>';
     }
 
     private function infoBlock(DocumentData $data): string
