@@ -58,6 +58,21 @@ class Din5008Preset implements DocumentPreset
 
     private const ADDRESS_ZONE_HEIGHT = 27.3;
 
+    /**
+     * Wie tief die Ruecksendeangabe unter der Feldkante beginnt.
+     *
+     * Nicht aus der Norm, sondern aus dem Umschlag: DIN 5008 stellt die
+     * Ruecksendeangabe in die Zusatz- und Vermerkzone (die oberen 17,7 mm),
+     * legt aber keinen Millimeter fest. An der Feldoberkante verschwand sie
+     * hinter der Oberkante des Sichtfensters — das Blatt sitzt im Umschlag
+     * einige Millimeter tiefer als seine eigene Oberkante.
+     *
+     * Am gefalteten Brief geprueft: 4,5 mm setzen sie auf rund 50,5 mm und
+     * damit zwischen die erste und die zweite Zeile des Informationsblocks
+     * rechts — sichtbar, und immer noch klar ueber der Anschrift.
+     */
+    private const ADDRESS_SUPPLEMENT_TOP = 4.5;
+
     /** Left edge of the information block on the right-hand side. */
     private const INFO_LEFT = 125.0;
 
@@ -129,6 +144,7 @@ class Din5008Preset implements DocumentPreset
         // eine ebenso feste Anschriftzone sass, war das 45-mm-Feld starr
         // 17,7 / 27,3 geteilt — auch wenn oben nur eine Ruecksendezeile stand.
         $addressSize = min($size, 10);
+        $zusatzOben = self::ADDRESS_SUPPLEMENT_TOP;
 
         // Der Zeilenabstand der Anschriftzone in Millimetern, damit genau
         // sechs Zeilen hineinpassen — unabhaengig davon, was die Vorlage fuer
@@ -197,6 +213,7 @@ class Din5008Preset implements DocumentPreset
            Der Gewinn ist nicht nur optisch: Fuer die Anschrift bleiben damit
            rund 40 mm statt 27,3 — acht Zeilen statt sechs. */
         .db-address-supplement {
+            padding-top: {$zusatzOben}mm;
             padding-bottom: 2.5mm;
             font-size: 6pt;
             color: {$muted};

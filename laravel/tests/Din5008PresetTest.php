@@ -211,6 +211,20 @@ it('lets the recipient follow the return line instead of a reserved band', funct
         ->and($css)->not->toMatch('/\.db-address-zone \{[^}]*(?<![\w-])height:/');
 });
 
+it('keeps the return line clear of the envelope window edge', function (): void {
+    // An der Feldoberkante verschwand sie hinter der Oberkante des
+    // Sichtfensters — das Blatt sitzt im Umschlag einige Millimeter tiefer als
+    // seine eigene Oberkante. Am gefalteten Brief geprueft, nicht gerechnet:
+    // Mit dem Vorlauf steht sie bei 50,5 mm und damit zwischen der ersten und
+    // zweiten Zeile des Informationsblocks rechts.
+    //
+    // DIN 5008 stellt die Ruecksendeangabe in die Zusatz- und Vermerkzone,
+    // legt aber keinen Millimeter fest — beides ist normgerecht.
+    $css = (new Din5008Preset)->css(PageSetup::din5008());
+
+    expect($css)->toMatch('/\.db-address-supplement \{[^}]*padding-top: [\d.]+mm;/');
+});
+
 it('keeps the address field itself at its DIN measurements', function (): void {
     // Der Rahmen muss ins Fenster eines DIN-lang-Umschlags passen. Nur die
     // Aufteilung INNEN hat sich je geaendert.
