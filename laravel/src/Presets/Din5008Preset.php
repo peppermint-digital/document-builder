@@ -128,8 +128,6 @@ class Din5008Preset implements DocumentPreset
         // MINDESTHOEHE. Frueher war es eine feste Hoehe, und weil darunter
         // eine ebenso feste Anschriftzone sass, war das 45-mm-Feld starr
         // 17,7 / 27,3 geteilt — auch wenn oben nur eine Ruecksendezeile stand.
-        $zoneHeight = self::ADDRESS_ZONE_HEIGHT;
-        $zusatzHeight = self::ADDRESS_ZUSATZ_HEIGHT;
         $addressSize = min($size, 10);
 
         // Der Zeilenabstand der Anschriftzone in Millimetern, damit genau
@@ -191,34 +189,25 @@ class Din5008Preset implements DocumentPreset
            festem Schlüssel: Ruecksendeangabe oben, Anschrift am unteren Rand
            verankert. Sie waechst damit nach OBEN in den Platz hinein, den die
            fast immer leere Zusatzzone nicht braucht. */
-        /* Die Ruecksendeangabe steht oben am Feldrand — dort, wo die Zusatz-
-           und Vermerkzone beginnt und wo sie auf einem Fensterkuvert erwartet
-           wird: auf der Hoehe der ersten Zeile des Informationsblocks. */
+        /* Ruecksendeangabe und Anschrift stehen einfach hintereinander, oben
+           im Feld. Kein festes Band dazwischen: DIN 5008 reserviert die oberen
+           17,7 mm als Zusatz- und Vermerkzone fuer Postvermerke, diese
+           Anwendung druckt dort aber nur die Ruecksendeangabe. Die uebrigen
+           14 mm standen als Loch zwischen ihr und dem Empfaenger.
+           Der Gewinn ist nicht nur optisch: Fuer die Anschrift bleiben damit
+           rund 40 mm statt 27,3 — acht Zeilen statt sechs. */
         .db-address-supplement {
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
+            padding-bottom: 2.5mm;
             font-size: 6pt;
             color: {$muted};
         }
-        /* Die Anschriftzone: oben in ihrer DIN-Lage, 27,3 mm hoch — und mit
-           IHREM EIGENEN Zeilenmass.
-           DIN 5008 bemisst die Zone fuer sechs Zeilen, das sind 4,55 mm je
-           Zeile. Der Brieftext wird weiter gesetzt (10 pt x 1,35 = 6,1 mm),
-           und solange die Zone das erbte, passten nur 4,7 Zeilen hinein: Eine
-           Anschrift mit umbrechendem Firmennamen verlor ihre Ortszeile, die
-           `overflow: hidden` des Feldes waagerecht durchschnitt.
-           Am dompdf-Pruefstand nachgemessen: Bei 10 pt ergibt `line-height: 1`
-           4,52 mm, sechs Zeilen also 27,1 mm — die Norm ist erfuellt. Der
-           Schriftgrad wird dafuer bei 10 pt gedeckelt; darueber passen die
-           sechs Zeilen rechnerisch nicht mehr in die Zone. */
+        /* Die Anschrift traegt ihr eigenes Zeilenmass: DIN bemisst sie mit
+           4,55 mm je Zeile, der Brieftext laeuft mit 6,1 mm. Solange die Zone
+           das erbte, verlor eine Anschrift mit umbrechendem Firmennamen ihre
+           Ortszeile an das `overflow: hidden` des Feldes. Am dompdf-Pruefstand
+           gemessen: 10 pt mit `line-height: 1` ergeben 4,52 mm. Der Grad wird
+           bei 10 pt gedeckelt, darueber wird die Zeile zu hoch. */
         .db-address-zone {
-            position: absolute;
-            top: {$zusatzHeight}mm;
-            left: 0;
-            right: 0;
-            height: {$zoneHeight}mm;
             font-size: {$addressSize}pt;
             line-height: 1;
         }

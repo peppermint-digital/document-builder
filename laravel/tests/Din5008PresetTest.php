@@ -193,22 +193,22 @@ it('caps the address type at the size the six lines were measured for', function
         ->and($klein)->toMatch('/\.db-address-zone \{[^}]*font-size: 9pt;/');
 });
 
-it('keeps the address zone at its DIN position inside the field', function (): void {
-    // Oben in der Anschriftzone, nicht am Feldboden: Eine kurze Anschrift soll
-    // dort beginnen, wo sie immer begann — 17,7 mm unter der Feldkante, also
-    // 62,7 mm ab Blattoberkante.
+it('lets the recipient follow the return line instead of a reserved band', function (): void {
+    // DIN 5008 reserviert die oberen 17,7 mm des Feldes als Zusatz- und
+    // Vermerkzone fuer Postvermerke. Diese Anwendung druckt dort nur die
+    // Ruecksendeangabe — eine Zeile zu 6 pt. Die uebrigen rund 14 mm standen
+    // als Loch zwischen ihr und dem Empfaenger.
+    //
+    // Beide stehen jetzt im Fluss hintereinander. Der Gewinn ist nicht nur
+    // optisch: Fuer die Anschrift bleiben rund 40 mm statt 27,3 — acht Zeilen
+    // statt sechs.
     $css = (new Din5008Preset)->css(PageSetup::din5008());
 
-    expect($css)->toMatch('/\.db-address-zone \{[^}]*top: 17.7mm;/')
-        ->and($css)->toMatch('/\.db-address-zone \{[^}]*height: 27.3mm;/');
-});
-
-it('keeps the return line at the top edge of the field', function (): void {
-    // Dort steht sie auf einem Fensterkuvert: auf der Hoehe der ersten Zeile
-    // des Informationsblocks, nicht unter ihm.
-    $css = (new Din5008Preset)->css(PageSetup::din5008());
-
-    expect($css)->toMatch('/\.db-address-supplement \{[^}]*top: 0;/');
+    expect($css)->toMatch('/\.db-address-supplement \{[^}]*padding-bottom: [\d.]+mm;/')
+        ->and($css)->not->toMatch('/\.db-address-supplement \{[^}]*position: absolute;/')
+        ->and($css)->not->toMatch('/\.db-address-zone \{[^}]*position: absolute;/')
+        // Ohne den Riegel vor `height` trifft das Muster auch `line-height`.
+        ->and($css)->not->toMatch('/\.db-address-zone \{[^}]*(?<![\w-])height:/');
 });
 
 it('keeps the address field itself at its DIN measurements', function (): void {
