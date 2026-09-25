@@ -1,8 +1,6 @@
 <?php
 
-use Peppermint\DocumentBuilder\Data\DocumentData;
 use Peppermint\DocumentBuilder\Data\PageSetup;
-use Peppermint\DocumentBuilder\Data\Party;
 use Peppermint\DocumentBuilder\Presets\Din5008Preset;
 
 it('places the address field and subject line at the DIN offsets', function (): void {
@@ -169,56 +167,53 @@ it('draws the fold marks of the requested form', function (): void {
         ->and($b)->toContain('top: 88.1mm');
 });
 
-it('divides the address field by need instead of by a fixed key', function (): void {
-    // Das Feld ist 45 mm hoch. Frueher war es starr geteilt: Zusatzzone
-    // 17,7 mm, Anschriftzone 27,3 mm, beide mit fester Hoehe. Weil oben in
-    // aller Regel nur eine Ruecksendezeile steht, stand dort ein 13-mm-Loch,
-    // waehrend unten die Ortszeile aus dem Feld fiel und von `overflow:
-    // hidden` waagerecht durchgeschnitten wurde.
+it('gives the address zone its own measure so the six DIN lines fit', function (): void {
+    // DIN 5008 bemisst die Anschriftzone fuer sechs Zeilen in 27,3 mm, das
+    // sind 4,55 mm je Zeile. Der Brieftext wird weiter gesetzt — 10 pt x 1,35
+    // ergibt 6,1 mm —, und solange die Zone das erbte, passten nur 4,7 Zeilen
+    // hinein. Eine Anschrift mit umbrechendem Firmennamen verlor dadurch ihre
+    // Ortszeile: `overflow: hidden` des Feldes schnitt sie waagerecht durch.
     //
-    // Am dompdf-Pruefstand gemessen: DejaVu Sans hebt bei 11 pt jede Zeile auf
-    // mindestens 16,4 pt (5,79 mm) an — auch wenn man `line-height` kleiner
-    // vorgibt. In 27,3 mm passen damit 4,72 Zeilen. Die Zeilenhoehe ist also
-    // NICHT die Stellschraube; der Platz im Feld ist es.
-    $css = (new Din5008Preset)->css(PageSetup::din5008());
+    // Am dompdf-Pruefstand nachgemessen: 10 pt mit `line-height: 1` ergibt
+    // 4,52 mm, sechs Zeilen also 27,1 mm.
+    $css = (new Din5008Preset)->css(PageSetup::din5008(), ['font_size' => 10, 'line_height' => 1.35]);
 
-    expect($css)->not->toContain('.db-address-zone { height:')
-        ->and($css)->not->toMatch('/\.db-address-supplement \{[^}]*height: [\d.]+mm/');
+    expect($css)->toMatch('/\.db-address-zone \{[^}]*line-height: 1;/');
 });
 
-it('anchors the address block at the bottom of the field so it grows upwards', function (): void {
-    // Nach oben, in den Platz der fast immer leeren Zusatzzone — nicht nach
-    // unten, wo die Betreffzeile steht.
-    $css = (new Din5008Preset)->css(PageSetup::din5008());
+it('caps the address type at the size the six lines were measured for', function (): void {
+    // Ein groesser gesetzter Brieftext darf die Anschrift nicht mitziehen:
+    // bei 11 pt misst die engste Zeile 4,97 mm, sechs davon waeren 29,8 mm
+    // und passten nicht mehr in die Zone. Kleiner gesetzte Designs behalten
+    // ihren Grad — die Deckelung ist ein Riegel, kein Eingriff.
+    $gross = (new Din5008Preset)->css(PageSetup::din5008(), ['font_size' => 14]);
+    $klein = (new Din5008Preset)->css(PageSetup::din5008(), ['font_size' => 9]);
 
-    expect($css)->toMatch('/\.db-address-block \{[^}]*bottom: 0;/');
+    expect($gross)->toMatch('/\.db-address-zone \{[^}]*font-size: 10pt;/')
+        ->and($klein)->toMatch('/\.db-address-zone \{[^}]*font-size: 9pt;/');
 });
 
-it('keeps the return line directly above the recipient', function (): void {
-    // Beide stehen in EINEM Block, die Ruecksendeangabe zuerst und nur durch
-    // einen knappen Abstand getrennt. Sie sass frueher oben am Feldrand,
-    // waehrend die Anschrift auf fester Hoehe darunter begann — dazwischen
-    // klaffte der ungenutzte Rest der Zusatzzone.
-    $preset = new Din5008Preset;
-    $daten = new DocumentData(
-        type: 'invoice',
-        sender: new Party('Absender GmbH'),
-        recipient: new Party('Empfaenger GmbH', ['Weg 1', '30159 Hannover'], note: 'Absender GmbH · Weg 2 · 30159 Hannover'),
-    );
+it('keeps the address zone at its DIN position inside the field', function (): void {
+    // Oben in der Anschriftzone, nicht am Feldboden: Eine kurze Anschrift soll
+    // dort beginnen, wo sie immer begann — 17,7 mm unter der Feldkante, also
+    // 62,7 mm ab Blattoberkante.
+    $css = (new Din5008Preset)->css(PageSetup::din5008());
 
-    $html = $preset->render($daten, '<p>x</p>', PageSetup::din5008());
+    expect($css)->toMatch('/\.db-address-zone \{[^}]*top: 17.7mm;/')
+        ->and($css)->toMatch('/\.db-address-zone \{[^}]*height: 27.3mm;/');
+});
 
-    expect($html)->toContain('<div class="db-address"><div class="db-address-block">')
-        ->and($html)->toMatch('/db-address-supplement.*db-address-zone/s');
+it('keeps the return line at the top edge of the field', function (): void {
+    // Dort steht sie auf einem Fensterkuvert: auf der Hoehe der ersten Zeile
+    // des Informationsblocks, nicht unter ihm.
+    $css = (new Din5008Preset)->css(PageSetup::din5008());
 
-    $css = $preset->css(PageSetup::din5008());
-
-    expect($css)->toMatch('/\.db-address-supplement \{[^}]*padding-bottom: [\d.]+mm;/');
+    expect($css)->toMatch('/\.db-address-supplement \{[^}]*top: 0;/');
 });
 
 it('keeps the address field itself at its DIN measurements', function (): void {
-    // Der Rahmen bleibt, was er war — er muss ins Fenster eines DIN-lang-
-    // Umschlags passen. Nur die Aufteilung INNEN hat sich geaendert.
+    // Der Rahmen muss ins Fenster eines DIN-lang-Umschlags passen. Nur die
+    // Aufteilung INNEN hat sich je geaendert.
     $css = (new Din5008Preset)->css(PageSetup::din5008());
 
     expect($css)->toMatch('/\.db-address \{[^}]*width: 85mm;/')
