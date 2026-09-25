@@ -58,6 +58,23 @@ class Din5008Preset implements DocumentPreset
 
     private const ADDRESS_ZONE_HEIGHT = 27.3;
 
+    /**
+     * Die Anschriftzone fasst nach DIN 5008 genau sechs Zeilen. Daraus folgt
+     * ihr Zeilenabstand — 27,3 / 6 = 4,55 mm —, und der ist NICHT derselbe wie
+     * im Brieftext: Der Fliesstext wird nach Lesbarkeit gesetzt, die Anschrift
+     * nach dem Fenster, in das sie passen muss.
+     *
+     * Warum das eine eigene Rechnung braucht: Das Feld hat feste Hoehe und
+     * `overflow: hidden`. Bei 11pt und Zeilenhoehe 1,5 — den Vorgaben der
+     * Standardvorlagen — misst eine Zeile 5,82 mm, es passen also nur 4,69.
+     * Ein Empfaenger, dessen Firmenname umbricht, braucht fuenf: Name (zwei),
+     * Person, Strasse, Ort. Die Ortszeile wurde dann auf halber Hoehe
+     * abgeschnitten — nicht weggelassen, sondern waagerecht durchgeschnitten,
+     * was auf einem versendeten Beleg niemandem auffaellt, bis die Post ihn
+     * zurueckschickt.
+     */
+    private const ADDRESS_ZONE_LINES = 6;
+
     /** Left edge of the information block on the right-hand side. */
     private const INFO_LEFT = 125.0;
 
@@ -126,6 +143,16 @@ class Din5008Preset implements DocumentPreset
         $addressHeight = self::addressHeight();
         $zusatzHeight = self::ADDRESS_ZUSATZ_HEIGHT;
         $zoneHeight = self::ADDRESS_ZONE_HEIGHT;
+
+        // Der Zeilenabstand der Anschriftzone in Millimetern, damit genau
+        // sechs Zeilen hineinpassen — unabhaengig davon, was die Vorlage fuer
+        // den Brieftext vorgibt.
+        $addressLine = round($zoneHeight / self::ADDRESS_ZONE_LINES, 2);
+
+        // Die Schrift darf die Zeile nicht sprengen. Bei den ueblichen 10 und
+        // 11pt aendert sich dadurch nichts — die Deckelung greift erst, wenn
+        // eine Vorlage den Brieftext sehr gross setzt.
+        $addressSize = min($size, round($addressLine / 25.4 * 72 / 1.15, 1));
         $infoWidth = self::INFO_WIDTH;
         $subjectSize = $size + 1;
 
@@ -183,7 +210,11 @@ class Din5008Preset implements DocumentPreset
             font-size: 7pt;
             color: {$muted};
         }
-        .db-address-zone { height: {$zoneHeight}mm; }
+        .db-address-zone {
+            height: {$zoneHeight}mm;
+            font-size: {$addressSize}pt;
+            line-height: {$addressLine}mm;
+        }
 
         /* Information block, top edge flush with the address field. */
         .db-info {

@@ -166,3 +166,51 @@ it('draws the fold marks of the requested form', function (): void {
     expect($a)->toContain('top: 70.1mm')
         ->and($b)->toContain('top: 88.1mm');
 });
+
+it('fits the six address lines DIN 5008 prescribes, whatever the body type is set to', function (float $size, float $lineHeight): void {
+    // Die Werte der Standardvorlagen (11 / 1,5) und die des Designs (10 / 1,35).
+    // Mit dem Zeilenabstand des Brieftextes passten bei 11 / 1,5 nur 4,69
+    // Zeilen in die 27,3 mm der Anschriftzone. Ein Empfaenger, dessen
+    // Firmenname umbricht, braucht fuenf — die Ortszeile wurde waagerecht
+    // durchgeschnitten, weil das Feld `overflow: hidden` traegt.
+    $css = (new Din5008Preset)->css(PageSetup::din5008(), [
+        'font_size' => $size,
+        'line_height' => $lineHeight,
+    ]);
+
+    expect($css)->toMatch('/\.db-address-zone \{[^}]*line-height: ([\d.]+)mm/');
+
+    preg_match('/\.db-address-zone \{[^}]*line-height: ([\d.]+)mm/', $css, $treffer);
+    $zeile = (float) $treffer[1];
+
+    expect($zeile * 6)->toBeLessThanOrEqual(27.3);
+})->with([
+    'Standardvorlage' => [11.0, 1.5],
+    'Design Klassik' => [10.0, 1.35],
+    'Design Kompakt' => [9.0, 1.25],
+    'sehr gross gesetzt' => [14.0, 1.8],
+]);
+
+it('keeps the address font inside its own line box', function (): void {
+    // Die Zeile misst 4,55 mm (12,9 pt). Eine Vorlage, die den Brieftext auf
+    // 14 pt setzt, darf die Anschrift nicht mitwachsen lassen — sonst stehen
+    // die Zeilen ineinander.
+    $css = (new Din5008Preset)->css(PageSetup::din5008(), ['font_size' => 14, 'line_height' => 1.8]);
+
+    preg_match('/\.db-address-zone \{[^}]*font-size: ([\d.]+)pt;\s*line-height: ([\d.]+)mm/', $css, $treffer);
+
+    $schrift = (float) $treffer[1];
+    $zeileInPt = (float) $treffer[2] / 25.4 * 72;
+
+    expect($schrift)->toBeLessThan($zeileInPt);
+});
+
+it('leaves the usual type sizes untouched', function (): void {
+    // Die Deckelung ist ein Riegel, kein Eingriff: Bei 11 pt soll die
+    // Anschrift weiterhin 11 pt sein, nur enger gesetzt.
+    $css = (new Din5008Preset)->css(PageSetup::din5008(), ['font_size' => 11, 'line_height' => 1.5]);
+
+    preg_match('/\.db-address-zone \{[^}]*font-size: ([\d.]+)pt/', $css, $treffer);
+
+    expect((float) $treffer[1])->toBe(11.0);
+});
