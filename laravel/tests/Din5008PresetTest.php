@@ -167,50 +167,39 @@ it('draws the fold marks of the requested form', function (): void {
         ->and($b)->toContain('top: 88.1mm');
 });
 
-it('fits the six address lines DIN 5008 prescribes, whatever the body type is set to', function (float $size, float $lineHeight): void {
-    // Die Werte der Standardvorlagen (11 / 1,5) und die des Designs (10 / 1,35).
-    // Mit dem Zeilenabstand des Brieftextes passten bei 11 / 1,5 nur 4,69
-    // Zeilen in die 27,3 mm der Anschriftzone. Ein Empfaenger, dessen
-    // Firmenname umbricht, braucht fuenf — die Ortszeile wurde waagerecht
-    // durchgeschnitten, weil das Feld `overflow: hidden` traegt.
-    $css = (new Din5008Preset)->css(PageSetup::din5008(), [
-        'font_size' => $size,
-        'line_height' => $lineHeight,
-    ]);
+it('divides the address field by need instead of by a fixed key', function (): void {
+    // Das Feld ist 45 mm hoch. Frueher war es starr geteilt: Zusatzzone
+    // 17,7 mm, Anschriftzone 27,3 mm, beide mit fester Hoehe. Weil oben in
+    // aller Regel nur eine Ruecksendezeile steht, stand dort ein 13-mm-Loch,
+    // waehrend unten die Ortszeile aus dem Feld fiel und von `overflow:
+    // hidden` waagerecht durchgeschnitten wurde.
+    //
+    // Am dompdf-Pruefstand gemessen: DejaVu Sans hebt bei 11 pt jede Zeile auf
+    // mindestens 16,4 pt (5,79 mm) an — auch wenn man `line-height` kleiner
+    // vorgibt. In 27,3 mm passen damit 4,72 Zeilen. Die Zeilenhoehe ist also
+    // NICHT die Stellschraube; der Platz im Feld ist es.
+    $css = (new Din5008Preset)->css(PageSetup::din5008());
 
-    expect($css)->toMatch('/\.db-address-zone \{[^}]*line-height: ([\d.]+)mm/');
-
-    preg_match('/\.db-address-zone \{[^}]*line-height: ([\d.]+)mm/', $css, $treffer);
-    $zeile = (float) $treffer[1];
-
-    expect($zeile * 6)->toBeLessThanOrEqual(27.3);
-})->with([
-    'Standardvorlage' => [11.0, 1.5],
-    'Design Klassik' => [10.0, 1.35],
-    'Design Kompakt' => [9.0, 1.25],
-    'sehr gross gesetzt' => [14.0, 1.8],
-]);
-
-it('keeps the address font inside its own line box', function (): void {
-    // Die Zeile misst 4,55 mm (12,9 pt). Eine Vorlage, die den Brieftext auf
-    // 14 pt setzt, darf die Anschrift nicht mitwachsen lassen — sonst stehen
-    // die Zeilen ineinander.
-    $css = (new Din5008Preset)->css(PageSetup::din5008(), ['font_size' => 14, 'line_height' => 1.8]);
-
-    preg_match('/\.db-address-zone \{[^}]*font-size: ([\d.]+)pt;\s*line-height: ([\d.]+)mm/', $css, $treffer);
-
-    $schrift = (float) $treffer[1];
-    $zeileInPt = (float) $treffer[2] / 25.4 * 72;
-
-    expect($schrift)->toBeLessThan($zeileInPt);
+    expect($css)->not->toContain('.db-address-zone { height:')
+        ->and($css)->toMatch('/\.db-address-supplement \{[^}]*min-height:/')
+        ->and($css)->not->toMatch('/\.db-address-supplement \{[^}]*[^n-]height: [\d.]+mm/');
 });
 
-it('leaves the usual type sizes untouched', function (): void {
-    // Die Deckelung ist ein Riegel, kein Eingriff: Bei 11 pt soll die
-    // Anschrift weiterhin 11 pt sein, nur enger gesetzt.
-    $css = (new Din5008Preset)->css(PageSetup::din5008(), ['font_size' => 11, 'line_height' => 1.5]);
+it('anchors the address block at the bottom of the field so it grows upwards', function (): void {
+    // Nach oben, in den Platz der fast immer leeren Zusatzzone — nicht nach
+    // unten, wo die Betreffzeile steht.
+    $css = (new Din5008Preset)->css(PageSetup::din5008());
 
-    preg_match('/\.db-address-zone \{[^}]*font-size: ([\d.]+)pt/', $css, $treffer);
+    expect($css)->toMatch('/\.db-address-zone \{[^}]*bottom: 0;/')
+        ->and($css)->toMatch('/\.db-address-supplement \{[^}]*top: 0;/');
+});
 
-    expect((float) $treffer[1])->toBe(11.0);
+it('keeps the address field itself at its DIN measurements', function (): void {
+    // Der Rahmen bleibt, was er war — er muss ins Fenster eines DIN-lang-
+    // Umschlags passen. Nur die Aufteilung INNEN hat sich geaendert.
+    $css = (new Din5008Preset)->css(PageSetup::din5008());
+
+    expect($css)->toMatch('/\.db-address \{[^}]*width: 85mm;/')
+        ->and($css)->toMatch('/\.db-address \{[^}]*height: 45mm;/')
+        ->and($css)->toMatch('/\.db-address \{[^}]*overflow: hidden;/');
 });
