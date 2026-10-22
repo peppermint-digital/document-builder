@@ -86,6 +86,9 @@ class LineItemsRenderer
         $letzterIndex = count($items) - 1;
 
         foreach (array_values($items) as $index => $item) {
+            // Eine Position kann MEHRERE Zeilen belegen (lange Notiz, siehe
+            // `renderRow()`). Je Position bleibt es trotzdem EIN Eintrag —
+            // sonst verschoeben sich die Indizes, auf die `page_breaks` zeigt.
             $rows[] = $this->renderRow($item, $columns, $options);
             $laufend += (float) ($item->total ?? 0);
 
@@ -94,16 +97,36 @@ class LineItemsRenderer
                 continue;
             }
 
-            $rows[] = $this->carryRow('Übertrag', $laufend, $columns, $options, 'db-carry-end');
-            $rows[] = '<tr class="db-page-break-row"><td colspan="'.count($columns).'"></td></tr>';
-            $rows[] = $this->carryRow('Übertrag', $laufend, $columns, $options, 'db-carry-start');
+            $rows[] = [$this->carryRow('Übertrag', $laufend, $columns, $options, 'db-carry-end')];
+            $rows[] = ['<tr class="db-page-break-row"><td colspan="'.count($columns).'"></td></tr>'];
+            $rows[] = [$this->carryRow('Übertrag', $laufend, $columns, $options, 'db-carry-start')];
         }
 
         // Die letzte Positionszeile wandert in die Schlussgruppe, damit sie den
         // Summenblock nicht allein auf einer leeren Seite zurücklässt.
-        $tail = $totalRows !== [] && $rows !== [] ? array_pop($rows) : '';
+        //
+        // Belegt die letzte Position mehrere Zeilen, wandert NUR ihre letzte
+        // mit (Bug #948). Den ganzen Block mitzunehmen hiesse, eine Position
+        // mit langer Notiz samt Summe in einen unteilbaren Block zu stecken —
+        // der passt dann nirgends mehr hin und laesst die Seite davor leer.
+        // Bei kurzer Notiz besteht der Block aus genau einer Zeile; dort ist
+        // das unveraendert dasselbe wie vorher.
+        $tail = '';
 
-        $body = implode('', $rows);
+        if ($totalRows !== [] && $rows !== []) {
+            $letzte = array_pop($rows);
+            $tail = (string) array_pop($letzte);
+
+            if ($letzte !== []) {
+                $rows[] = $letzte;
+            }
+        }
+
+        $body = '';
+
+        foreach ($rows as $gruppe) {
+            $body .= implode('', $gruppe);
+        }
 
         if ($body === '' && $tail === '') {
             $body = '<tr><td class="db-empty" colspan="'.count($columns).'">'
@@ -160,6 +183,125 @@ class LineItemsRenderer
     }
 
     /**
+     * Eine lange Notiz als EIGENE Zeilen — oder nichts (Bug #948).
+     *
+     * ## Warum das nötig ist
+     *
+     * Die Notiz ritt bisher immer in der Bezeichnungszelle ihrer Position mit.
+     * Bei einem umfangreichen Text wurde die Zeile dadurch sehr hoch — im
+     * gemeldeten Fall rund 160 mm —, und **DomPDF kann eine Tabellenzeile
+     * nicht über eine Seitengrenze teilen**. Eine Zeile, die nicht mehr in den
+     * Rest der Seite passt, springt als Ganzes auf die nächste. Zurück blieb
+     * der wiederholte Tabellenkopf über einer leeren Seite.
+     *
+     * Gemessen an AB-2026-0038 und lokal nachgebaut: mit langer Notiz trug
+     * Seite 1 null Positionen, bei zwei und drei Positionen ebenso. In eigenen
+     * Zeilen füllt sich Seite 1, und der Umbruch fällt zwischen zwei Absätze.
+     *
+     * ## Warum nur bei LANGEN Notizen
+     *
+     * Eigene Zeilen sind nicht gratis: Sie verändern den Satz. Eine kurze
+     * Notiz — der Regelfall, etwa „135 g/m² Bilderdruck matt" — hat das
+     * Problem nicht und bleibt deshalb unangetastet in ihrer Zelle. So ändert
+     * sich das Aussehen nur bei Belegen, die heute ohnehin falsch umbrechen.
+     *
+     * ## Zur Schwelle
+     *
+     * `$grenze` ist eine **Schätzung**, keine Messung — die Höhe kennt erst
+     * der Renderer. Sie ist aus der Geometrie gewählt: Eine Notizzeile ist bei
+     * 8 pt gut 3,2 mm hoch, der nutzbare Textbereich einer Folgeseite rund
+     * 200 mm. Ab etwa 20 Zeilen belegt die Notiz damit mehr als ein Drittel
+     * der Seite, und ein Sprung wird wahrscheinlich.
+     *
+     * Falsch geschätzt ist hier folgenlos für die Richtigkeit: Beide
+     * Darstellungen sind gültig, die eine bricht nur besser um. Eine zu hoch
+     * gegriffene Schwelle lässt einen Beleg umbrechen wie bisher, eine zu
+     * niedrige setzt eine Notiz in eigene Zeilen, die auch in der Zelle
+     * gepasst hätte. Wer nachsteuern will, setzt `note_rows_min_lines`.
+     *
+     * @param  list<array{key: string, label: string, width: string, align?: string, format?: string}>  $columns
+     * @param  array<string, mixed>  $options
+     * @return list<string>
+     */
+    private function notizAlsZeilen(LineItem $item, array $columns, array $options): array
+    {
+        if ($item->note === null || $item->note === '') {
+            return [];
+        }
+
+        $grenze = (int) ($options['note_rows_min_lines'] ?? 20);
+
+        if ($grenze <= 0) {
+            return [];
+        }
+
+        $absaetze = preg_split('/\R/', $item->note) ?: [];
+
+        if ($this->geschaetzteZeilen($absaetze, $columns) < $grenze) {
+            return [];
+        }
+
+        $zeilen = [];
+        $letzter = count($absaetze) - 1;
+
+        foreach ($absaetze as $i => $absatz) {
+            $zellen = '';
+
+            foreach ($columns as $column) {
+                $inhalt = $column['key'] === 'description'
+                    ? '<span class="db-note">'.($absatz === '' ? '&nbsp;' : $this->escape($absatz)).'</span>'
+                    : '';
+
+                $zellen .= '<td class="db-align-'.$this->escape($column['align'] ?? 'left').'"'
+                    .' style="width: '.$this->escape($column['width']).'">'
+                    .$inhalt
+                    .'</td>';
+            }
+
+            // Nur die LETZTE Notizzeile schliesst die Position ab und traegt
+            // damit die Trennlinie. Alles darueber bleibt offen, sonst zoege
+            // sich eine Linie durch jeden Absatz.
+            $klasse = 'db-note-row'.($i === $letzter ? '' : ' db-row-open');
+
+            $zeilen[] = '<tr class="'.$klasse.'">'.$zellen.'</tr>';
+        }
+
+        return $zeilen;
+    }
+
+    /**
+     * Wie viele gedruckte Zeilen die Absätze in der Bezeichnungsspalte etwa
+     * belegen.
+     *
+     * Der Umbruch je Absatz wird aus der Spaltenbreite geschätzt: Bei 8 pt
+     * gehen auf 1 % Seitenbreite ungefähr ein Zeichen — bei 46 % also rund 46
+     * Zeichen je Zeile. Ein leerer Absatz belegt trotzdem eine Zeile.
+     *
+     * @param  list<string>  $absaetze
+     * @param  list<array{key: string, label: string, width: string, align?: string, format?: string}>  $columns
+     */
+    private function geschaetzteZeilen(array $absaetze, array $columns): int
+    {
+        $breite = 46.0;
+
+        foreach ($columns as $column) {
+            if ($column['key'] === 'description') {
+                $breite = max((float) rtrim($column['width'], '% '), 10.0);
+                break;
+            }
+        }
+
+        $zeichenJeZeile = max((int) round($breite), 10);
+        $zeilen = 0;
+
+        foreach ($absaetze as $absatz) {
+            $zeilen += max(1, (int) ceil(mb_strlen($absatz) / $zeichenJeZeile));
+        }
+
+        return $zeilen;
+    }
+
+    /**
      * Eine Übertragszeile — dieselbe Spaltenbreite wie die Positionen, damit
      * der Betrag unter der Gesamtspalte steht und nicht daneben.
      *
@@ -182,8 +324,9 @@ class LineItemsRenderer
      * @param  list<array{key: string, label: string, width: string, align?: string, format?: string}>  $columns
      * @param  array<string, mixed>  $options
      */
-    private function renderRow(LineItem $item, array $columns, array $options): string
+    private function renderRow(LineItem $item, array $columns, array $options): array
     {
+        $notizzeilen = $this->notizAlsZeilen($item, $columns, $options);
         $cells = '';
 
         foreach ($columns as $column) {
@@ -198,7 +341,10 @@ class LineItemsRenderer
             // zusammen, in dem „100 x Groesse S" und „100 x Groesse M"
             // nebeneinander standen. Auf dem Papier war das nicht mehr
             // auseinanderzuhalten.
-            if ($column['key'] === 'description' && $item->note !== null && $item->note !== '') {
+            if ($column['key'] === 'description'
+                && $notizzeilen === []
+                && $item->note !== null
+                && $item->note !== '') {
                 $content .= '<span class="db-note">'.nl2br($this->escape($item->note), false).'</span>';
             }
 
@@ -213,7 +359,12 @@ class LineItemsRenderer
                 .'</td>';
         }
 
-        return '<tr>'.$cells.'</tr>';
+        // Steht die Notiz in eigenen Zeilen, traegt die Positionszeile keine
+        // Trennlinie — die gehoert unter die ganze Position, nicht zwischen
+        // Bezeichnung und Notiz.
+        $erste = '<tr'.($notizzeilen === [] ? '' : ' class="db-row-open"').'>'.$cells.'</tr>';
+
+        return array_merge([$erste], $notizzeilen);
     }
 
     /**

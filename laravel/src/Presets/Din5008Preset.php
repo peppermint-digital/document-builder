@@ -276,6 +276,16 @@ class Din5008Preset implements DocumentPreset
             vertical-align: top;
         }
         table.db-line-items tbody tr { page-break-inside: avoid; }
+        /* Eine lange Notiz steht in eigenen Zeilen, damit DomPDF zwischen den
+           Absaetzen umbrechen kann (Bug #948, siehe LineItemsRenderer). Die
+           Trennlinie gehoert unter die GANZE Position — nicht zwischen
+           Bezeichnung und Notiz und nicht zwischen zwei Absaetzen. Deshalb
+           tragen alle Zeilen bis auf die letzte der Position keine. */
+        table.db-line-items tbody tr.db-row-open td {
+            border-bottom: 0;
+            padding-bottom: 0;
+        }
+        table.db-line-items tbody tr.db-note-row td { padding-top: 0; }
         table.db-line-items .db-note {
             display: block;
             color: {$muted};
