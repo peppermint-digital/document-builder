@@ -183,6 +183,60 @@ class LineItemsRenderer
     }
 
     /**
+     * Ob ein Wert als EIN unteilbares Wort breiter ist als seine Spalte
+     * (Bug #929).
+     *
+     * ## Was passiert ist
+     *
+     * Auf einer Rechnung stand `Pauschal7.450,00 €` — Einheit und Einzelpreis
+     * ohne jeden Abstand aneinander. Nachgemessen bei 170 mm Inhaltsbreite:
+     * `Pauschal` belegt 15,7 mm, die Spalte gibt ihm 13,6. Es laeuft also
+     * 2,1 mm in die Nachbarspalte, und ob daraus eine Beruehrung wird, haengt
+     * nur noch daran, wie lang der Betrag daneben ist.
+     *
+     * Die Spaltenbreiten taugen nicht als Angriffspunkt: Sie liegen je Vorlage
+     * als Datensatz und sind von Hand aenderbar. Was hier gebraucht wird, ist
+     * eine Zusage, die fuer JEDE Breite gilt.
+     *
+     * ## Warum nur einzelne Woerter
+     *
+     * Mehrwortiger Text bricht um und passt dadurch immer. Nur ein einzelnes
+     * langes Wort hat keine Trennstelle und laeuft heraus. Deshalb darf die
+     * Bezeichnungsspalte hiervon nie betroffen sein — eine lange Beschreibung
+     * soll umbrechen, nicht schrumpfen.
+     *
+     * ## Zur Schaetzung
+     *
+     * Die Spaltenbreite steht als Prozentwert, die Inhaltsbreite kennt der
+     * Renderer nicht. Gerechnet wird deshalb mit den 170 mm eines
+     * A4-Satzspiegels und rund 1,96 mm je Zeichen bei 10 pt — beides am
+     * Pruefstand gemessen, nicht gerechnet.
+     *
+     * Eine Fehlschaetzung ist folgenlos fuer die Richtigkeit: Sie setzt einen
+     * Wert kleiner, der auch so gepasst haette, oder laesst einen stehen, der
+     * knapp herausragt. Was sie nicht tut, ist Text verlieren.
+     *
+     * @param  array{key: string, label: string, width: string, align?: string, format?: string}  $column
+     */
+    private function laeuftUeber(mixed $wert, array $column): bool
+    {
+        if (! is_string($wert) || trim($wert) === '' || str_contains(trim($wert), ' ')) {
+            return false;
+        }
+
+        $breite = (float) rtrim($column['width'], '% ');
+
+        if ($breite <= 0.0) {
+            return false;
+        }
+
+        // 170 mm Satzspiegel, 1,96 mm je Zeichen bei 10 pt.
+        $platz = ($breite / 100) * 170.0;
+
+        return mb_strlen(trim($wert)) * 1.96 > $platz;
+    }
+
+    /**
      * Eine lange Notiz als EIGENE Zeilen — oder nichts (Bug #948).
      *
      * ## Warum das nötig ist
@@ -353,7 +407,13 @@ class LineItemsRenderer
             // `table-layout: fixed` bestimmt die erste Zeile die Spalten. Ohne
             // die Angabe richtete sich der Kopf nach den Prozentwerten und die
             // Zeile nach ihrem Inhalt — sichtbar versetzt.
-            $cells .= '<td class="db-align-'.$this->escape($column['align'] ?? 'left').'"'
+            $klassen = 'db-align-'.$this->escape($column['align'] ?? 'left');
+
+            if ($this->laeuftUeber($item->value($column['key']), $column)) {
+                $klassen .= ' db-eng';
+            }
+
+            $cells .= '<td class="'.$klassen.'"'
                 .' style="width: '.$this->escape($column['width']).'">'
                 .$content
                 .'</td>';

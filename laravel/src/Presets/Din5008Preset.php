@@ -291,6 +291,14 @@ class Din5008Preset implements DocumentPreset
             vertical-align: top;
         }
         table.db-line-items tbody tr { page-break-inside: avoid; }
+        /* Ein einzelnes Wort, das breiter ist als seine Spalte, bekommt
+           kleineren Grad statt in die Nachbarspalte zu laufen (Bug #929).
+           Gemeldet war `Pauschal7.450,00 €` — Einheit und Betrag ohne jeden
+           Abstand. `Pauschal` belegt bei 10 pt 15,7 mm, die Spalte gibt ihm
+           13,6; bei 85 % sind es 13,3 und es passt.
+           Welche Zelle das trifft, entscheidet `LineItemsRenderer`: Nur
+           einzelne Woerter, nie mehrwortiger Text — der bricht um. */
+        table.db-line-items td.db-eng { font-size: 85%; }
         /* Eine lange Notiz steht in eigenen Zeilen, damit DomPDF zwischen den
            Absaetzen umbrechen kann (Bug #948, siehe LineItemsRenderer). Die
            Trennlinie gehoert unter die GANZE Position — nicht zwischen
