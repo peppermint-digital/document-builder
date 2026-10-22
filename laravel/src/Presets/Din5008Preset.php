@@ -73,6 +73,18 @@ class Din5008Preset implements DocumentPreset
      */
     private const ADDRESS_SUPPLEMENT_TOP = 4.5;
 
+    /**
+     * Was das Band ueber der Anschrift mindestens braucht.
+     *
+     * 4,5 mm Vorlauf bis zur Ruecksendeangabe, ihre eigene Zeile bei 6 pt
+     * (rund 2,1 mm) und 2,5 mm Abstand zum Empfaenger darunter. Weniger, und
+     * die Zeile selbst geriete unter die Kante.
+     */
+    private const ADDRESS_SUPPLEMENT_MIN = 9.2;
+
+    /** Vorlauf und Abstand des Bandes zusammen — siehe `.db-address-supplement`. */
+    private const ADDRESS_SUPPLEMENT_PADDING = 7.0;
+
     /** Left edge of the information block on the right-hand side. */
     private const INFO_LEFT = 125.0;
 
@@ -205,13 +217,16 @@ class Din5008Preset implements DocumentPreset
            festem Schlüssel: Ruecksendeangabe oben, Anschrift am unteren Rand
            verankert. Sie waechst damit nach OBEN in den Platz hinein, den die
            fast immer leere Zusatzzone nicht braucht. */
-        /* Ruecksendeangabe und Anschrift stehen einfach hintereinander, oben
-           im Feld. Kein festes Band dazwischen: DIN 5008 reserviert die oberen
-           17,7 mm als Zusatz- und Vermerkzone fuer Postvermerke, diese
-           Anwendung druckt dort aber nur die Ruecksendeangabe. Die uebrigen
-           14 mm standen als Loch zwischen ihr und dem Empfaenger.
-           Der Gewinn ist nicht nur optisch: Fuer die Anschrift bleiben damit
-           rund 40 mm statt 27,3 — acht Zeilen statt sechs. */
+        /* Das Band zwischen Feldkante und Anschrift. Seine Hoehe steht NICHT
+           hier, sondern wird je Beleg gerechnet und als Attribut gesetzt —
+           siehe `bandHoehe()`. Im Regelfall ergibt sie die 17,7 mm der Zusatz-
+           und Vermerkzone, womit die Anschrift auf ihrer DIN-Zeile beginnt;
+           braucht eine lange Anschrift mehr als sechs Zeilen, gibt das Band
+           Platz ab, statt sie unten herauslaufen zu lassen.
+           Die gesetzte Hoehe ist die INHALTShoehe: `box-sizing: border-box`
+           beachtet DomPDF nicht — gemessen, die Anschrift landete damit bei
+           70,0 mm statt 62,7. Die Polsterungen rechnet `bandHoehe()` deshalb
+           selbst heraus. */
         .db-address-supplement {
             padding-top: {$zusatzOben}mm;
             padding-bottom: 2.5mm;
@@ -562,16 +577,113 @@ class Din5008Preset implements DocumentPreset
             ? $this->escape($data->recipient->note)
             : '';
 
-        // Ruecksendeangabe und Anschrift stehen in EINEM Block, der unten im
-        // Feld haengt. Sie gehoeren zusammen — die kleine Zeile ist die
-        // Absenderangabe fuers Fensterkuvert und steht unmittelbar ueber dem
-        // Empfaenger. Frueher sass sie oben am Feldrand, die Anschrift darunter
-        // auf fester Hoehe; dazwischen klaffte der ungenutzte Rest der
-        // Zusatzzone.
+        // Die Ruecksendeangabe steht oben im Feld, die Anschrift darunter —
+        // getrennt durch ein Band, dessen Hoehe GERECHNET wird. Siehe
+        // {@see static::bandHoehe()}: Im Regelfall ergibt es die DIN-Lage,
+        // bei einer langen Anschrift gibt es Platz ab.
         return '<div class="db-address">'
-            .'<div class="db-address-supplement">'.$supplement.'</div>'
+            .'<div class="db-address-supplement" style="height: '.$this->bandInhalt($lines).'mm">'
+            .$supplement
+            .'</div>'
             .'<div class="db-address-zone">'.implode('<br>', $lines).'</div>'
             .'</div>';
+    }
+
+    /**
+     * Wie hoch das Band ueber der Anschrift ist — und damit, wo sie beginnt.
+     *
+     * ## Die Norm
+     *
+     * DIN 5008 teilt das Anschriftfeld in zwei Zonen: oben 17,7 mm Zusatz- und
+     * Vermerkzone fuer Postvermerke, darunter 27,3 mm Anschriftzone fuer sechs
+     * Zeilen. Die Anschrift beginnt also 17,7 mm unter der Feldkante — bei
+     * Form B sind das 62,7 mm von der Blattoberkante.
+     *
+     * ## Was hier vorher stand, und warum es weg musste
+     *
+     * Zuerst hing die Anschrift am unteren Feldrand. Eine Anschrift mit
+     * umbrechendem Firmennamen wuchs nach oben aus dem Feld heraus und verlor
+     * ihre Ortszeile an dessen `overflow: hidden` — waagerecht durchgeschnitten.
+     *
+     * Die Antwort darauf war, das feste Band ganz aufzugeben: Ruecksendeangabe
+     * und Anschrift standen einfach hintereinander. Das behob den Beschnitt,
+     * setzte die Anschrift aber rund 10 mm zu hoch — gemessen 52,3 mm statt
+     * 62,7 mm. Im Druck fiel das als auffallend grosser Weissraum zwischen
+     * Anschrift und Betreffzeile auf; gemeldet am 22.10.2026.
+     *
+     * ## Was jetzt gilt
+     *
+     * Beides zugleich, weil die Hoehe gerechnet statt gesetzt wird:
+     *
+     *     bis 6 Zeilen → Band 17,7 mm → Anschrift bei 62,7 mm (Norm)
+     *     darueber     → Band schrumpft, die Anschrift waechst nach OBEN
+     *
+     * Der Regelfall trifft damit die Norm, und der Beschnitt bleibt behoben:
+     * Was ueber sechs Zeilen hinausgeht, holt sich den Platz aus der fast
+     * immer leeren Vermerkzone, statt unten herauszulaufen.
+     *
+     * Das Band faellt nie unter {@see self::ADDRESS_SUPPLEMENT_MIN} — darunter
+     * haette die Ruecksendeangabe selbst keinen Platz mehr, und sie zu
+     * verlieren waere kein besserer Tausch als eine fehlende Ortszeile.
+     */
+    private function bandHoehe(array $zeilen): float
+    {
+        $zeilenmass = self::ADDRESS_ZONE_HEIGHT / 6;
+        $benoetigt = max($this->gedruckteZeilen($zeilen), 1) * $zeilenmass;
+
+        $hoehe = min(
+            self::ADDRESS_ZUSATZ_HEIGHT,
+            self::addressHeight() - $benoetigt,
+        );
+
+        return round(max($hoehe, self::ADDRESS_SUPPLEMENT_MIN), 2);
+    }
+
+    /**
+     * Die Inhaltshoehe des Bandes — die Hoehe minus ihrer eigenen Polsterung.
+     *
+     * DomPDF beachtet `box-sizing: border-box` nicht. Gemessen: Mit `height`
+     * als Inhaltsmass kamen die 4,5 mm Vorlauf und 2,5 mm Abstand obendrauf,
+     * und die Anschrift stand bei 70,0 mm statt bei 62,7.
+     *
+     * @param  list<string>  $zeilen
+     */
+    private function bandInhalt(array $zeilen): float
+    {
+        return round(max($this->bandHoehe($zeilen) - self::ADDRESS_SUPPLEMENT_PADDING, 0.5), 2);
+    }
+
+    /**
+     * Wie viele Zeilen die Anschrift auf dem Papier belegt — nicht wie viele
+     * im Datensatz stehen.
+     *
+     * Der Unterschied ist genau der Fall, um den es geht: Ein langer
+     * Firmenname passt nicht in die 85 mm des Feldes und bricht um. Gemessen
+     * an einer achtzeiligen Anschrift wurden daraus ELF gedruckte Zeilen —
+     * und die liefen bis 106 mm, quer ueber die Betreffzeile.
+     *
+     * Die Zeichenzahl je Zeile ist geschaetzt: Bei 10 pt ist ein Zeichen im
+     * Mittel rund 1,9 mm breit, auf 85 mm also etwa 45. Eine Schaetzung
+     * genuegt hier, weil sie nur den SELTENEN Fall steuert — bis sechs Zeilen
+     * steht die Anschrift ohnehin auf ihrer DIN-Zeile, und daneben zu liegen
+     * heisst bloss, dass das Band ein paar Millimeter zu frueh oder zu spaet
+     * nachgibt.
+     *
+     * @param  list<string>  $zeilen
+     */
+    private function gedruckteZeilen(array $zeilen): int
+    {
+        $jeZeile = 45;
+        $summe = 0;
+
+        foreach ($zeilen as $zeile) {
+            // Der Text ist hier bereits maskiert; `&amp;` zaehlt sonst als
+            // fuenf Zeichen statt als eines.
+            $laenge = mb_strlen(html_entity_decode($zeile, ENT_QUOTES, 'UTF-8'));
+            $summe += max(1, (int) ceil($laenge / $jeZeile));
+        }
+
+        return $summe;
     }
 
     private function infoBlock(DocumentData $data): string

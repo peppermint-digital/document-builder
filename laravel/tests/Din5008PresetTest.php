@@ -51,7 +51,10 @@ it('renders the recipient into the address field and the meta into the info bloc
     $html = (new Din5008Preset)->render(offer(), '<p>body</p>', PageSetup::din5008());
 
     expect($html)->toContain('Mustermann &amp; Sohn GmbH')
-        ->and($html)->toContain('class="db-address-supplement">Einschreiben')
+        // Das Band traegt seit dem 22.10.2026 eine gerechnete Hoehe als
+        // Attribut; gesucht ist die Klasse mit ihrem Inhalt, nicht die genaue
+        // Schreibweise des Tags.
+        ->and($html)->toMatch('/class="db-address-supplement"[^>]*>Einschreiben/')
         ->and($html)->toContain('Angebotsnummer')
         ->and($html)->toContain('AN-2026-0815');
 });
@@ -193,22 +196,52 @@ it('caps the address type at the size the six lines were measured for', function
         ->and($klein)->toMatch('/\.db-address-zone \{[^}]*font-size: 9pt;/');
 });
 
-it('lets the recipient follow the return line instead of a reserved band', function (): void {
-    // DIN 5008 reserviert die oberen 17,7 mm des Feldes als Zusatz- und
-    // Vermerkzone fuer Postvermerke. Diese Anwendung druckt dort nur die
-    // Ruecksendeangabe — eine Zeile zu 6 pt. Die uebrigen rund 14 mm standen
-    // als Loch zwischen ihr und dem Empfaenger.
+it('puts the recipient on its DIN line', function (): void {
+    // DIN 5008 teilt das Anschriftfeld: oben 17,7 mm Zusatz- und Vermerkzone,
+    // darunter 27,3 mm Anschriftzone. Die Anschrift beginnt also 17,7 mm unter
+    // der Feldkante — bei Form B 62,7 mm von der Blattoberkante.
     //
-    // Beide stehen jetzt im Fluss hintereinander. Der Gewinn ist nicht nur
-    // optisch: Fuer die Anschrift bleiben rund 40 mm statt 27,3 — acht Zeilen
-    // statt sechs.
-    $css = (new Din5008Preset)->css(PageSetup::din5008());
+    // Hier stand bis zum 22.10.2026 das Gegenteil: Ruecksendeangabe und
+    // Anschrift liefen ohne Band hintereinander, damit der ungenutzte Rest der
+    // Vermerkzone kein Loch zwischen ihnen liess. Das behob einen echten
+    // Fehler — eine umbrechende Anschrift verlor ihre Ortszeile —, setzte die
+    // Anschrift aber rund 10 mm zu hoch: am Blatt gemessen 52,3 mm statt 62,7.
+    // Im Druck fiel es als auffallend grosser Weissraum vor der Betreffzeile
+    // auf und wurde gemeldet.
+    //
+    // Jetzt gilt beides, weil die Bandhoehe GERECHNET wird (`bandHoehe()`).
+    // Bis sechs Zeilen ergibt sie die 17,7 mm der Norm.
+    //
+    // Gepruefte Hoehe ist die INHALTShoehe: 17,7 - 7,0 Polsterung = 10,7.
+    // `box-sizing: border-box` beachtet DomPDF nicht, am Blatt gemessen.
+    $html = (new Din5008Preset)->render(offer(), '', PageSetup::din5008());
 
-    expect($css)->toMatch('/\.db-address-supplement \{[^}]*padding-bottom: [\d.]+mm;/')
-        ->and($css)->not->toMatch('/\.db-address-supplement \{[^}]*position: absolute;/')
-        ->and($css)->not->toMatch('/\.db-address-zone \{[^}]*position: absolute;/')
-        // Ohne den Riegel vor `height` trifft das Muster auch `line-height`.
-        ->and($css)->not->toMatch('/\.db-address-zone \{[^}]*(?<![\w-])height:/');
+    expect($html)->toContain('class="db-address-supplement" style="height: 10.7mm"');
+});
+
+it('moves the recipient up instead of letting a long address run over the subject', function (): void {
+    // Der Fall, den die fruehere Loesung richtig gesehen hat: Mehr als sechs
+    // gedruckte Zeilen passen nicht in die Anschriftzone. Sie liefen vorher
+    // bis 106 mm und damit quer ueber die Betreffzeile bei 98,4 mm — am Blatt
+    // gemessen.
+    //
+    // Das Band gibt dafuer Platz ab, statt die Anschrift herauslaufen zu
+    // lassen. Gezaehlt werden GEDRUCKTE Zeilen: Ein langer Firmenname passt
+    // nicht in die 85 mm des Feldes und bricht um.
+    $lang = offer(['recipient' => ['lines' => [
+        'Gesellschaft mit beschraenkter Haftung',
+        'Abteilung Marketing und Unternehmenskommunikation',
+        'z. Hd. Frau Dr. Margarethe Schoenberger-Lindemann',
+        'Pappelweg 4',
+        '30179 Hannover',
+    ]]]);
+
+    $html = (new Din5008Preset)->render($lang, '', PageSetup::din5008());
+
+    preg_match('/db-address-supplement" style="height: ([\d.]+)mm"/', $html, $m);
+
+    expect($m)->not->toBeEmpty()
+        ->and((float) $m[1])->toBeLessThan(10.7);
 });
 
 it('keeps the return line clear of the envelope window edge', function (): void {
