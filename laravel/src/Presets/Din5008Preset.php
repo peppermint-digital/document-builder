@@ -386,6 +386,12 @@ class Din5008Preset implements DocumentPreset
             border-collapse: collapse;
         }
         table.db-totals td { padding: 1mm 0; }
+        /* Abstand zwischen Beschriftung und Betrag. Die Zellen haben
+           waagerecht keine Polsterung, und der Block ist auf 70 mm
+           festgelegt — ohne diese Zeile stossen „Gesamtbetrag" und der
+           Betrag aneinander, sobald die Summe fuenfstellig wird
+           (Bug #1135). */
+        table.db-totals .db-total-label { padding-right: 4mm; }
         table.db-totals .db-total-amount { text-align: right; }
         table.db-totals .db-total-gross td {
             border-top: 0.4mm solid {$accent};

@@ -40,11 +40,19 @@ it('keeps the summary standalone when the template separates the two', function 
         ->and($html)->not->toContain('<tbody class="db-totals-rows">');
 });
 
-it('spans the summary label across every column but the last', function (): void {
+it('gives the summary amount the last two columns', function (): void {
     $html = builder()->html(offer(), '{{ line_items }}{{ totals }}');
 
-    // Sechs Standardspalten -> Label über fünf, Betrag in der letzten.
-    expect($html)->toContain('colspan="5"');
+    // Sechs Standardspalten -> Beschriftung über vier, Betrag über zwei.
+    //
+    // Bis zum 28.10.2026 bekam der Betrag nur die LETZTE Spalte (die
+    // Beschriftung trug colspan="5"). Die Gesamtzeile ist fett gesetzt und
+    // passte dort nicht mehr hinein: Gemeldet wurde `Gesamtbetrag13.610,27 €`
+    // ohne jeden Abstand (Bug #1135). Mit zwei Spalten hat der Betrag das
+    // Doppelte, und die Beschriftung rückt um eine Spalte nach links — der
+    // Abstand entsteht dabei von selbst.
+    expect($html)->toContain('<td class="db-total-label" colspan="4">')
+        ->and($html)->toContain('<td class="db-align-right" colspan="2">');
 });
 
 it('substitutes value placeholders and escapes them', function (): void {

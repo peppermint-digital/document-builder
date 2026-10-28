@@ -3,6 +3,7 @@
 namespace Peppermint\DocumentBuilder\Services;
 
 use Peppermint\DocumentBuilder\Data\LineItem;
+use Peppermint\DocumentBuilder\DocumentBuilder;
 
 /**
  * Lays out the line-item table.
@@ -23,6 +24,21 @@ use Peppermint\DocumentBuilder\Data\LineItem;
  */
 class LineItemsRenderer
 {
+    /**
+     * Rueckfall fuer den Satzspiegel, wenn der Aufrufer keinen nennt.
+     *
+     * Der echte Wert kommt als `content_width` aus dem Seitenaufbau. Dieser
+     * hier ist nur die Zahl, mit der dieser Code begonnen hat — er bleibt
+     * stehen, damit ein Aufruf ohne Seitenaufbau sich nicht aendert.
+     */
+    private const SATZSPIEGEL_MM = 170.0;
+
+    /** Polsterung einer Zelle, links und rechts je 1 mm (siehe Preset-CSS). */
+    private const ZELLPOLSTER_MM = 2.0;
+
+    /** Breite eines Zeichens bei 10 pt — gemessen, nicht gerechnet. */
+    private const MM_JE_ZEICHEN = 1.96;
+
     /**
      * The columns a German business document shows by default.
      *
@@ -161,7 +177,22 @@ class LineItemsRenderer
             return $lastItemRow === '' ? '' : '<tbody>'.$lastItemRow.'</tbody>';
         }
 
-        $labelSpan = max($columnCount - 1, 1);
+        // Summen- und Uebertragszeilen bekommen die letzten ZWEI Spalten fuer
+        // den Betrag, nicht nur die letzte (Bug #1135).
+        //
+        // Gemeldet war `Gesamtbetrag13.610,27 €` — Beschriftung und Betrag
+        // ohne jeden Abstand. Die Gesamtzeile ist fett gesetzt und passte
+        // damit nicht mehr in die 14-%-Spalte, fuer die die Breite gilt;
+        // sie lief nach links heraus, genau dorthin, wo die Beschriftung
+        // endet. Mit zwei Spalten hat der Betrag das Doppelte und die
+        // Beschriftung rueckt eine Spalte nach links — der Abstand, den
+        // Volker vermisst hat, entsteht dabei von selbst.
+        //
+        // Nicht verkleinern wie bei den Positionszeilen: Der Gesamtbetrag
+        // ist die Zahl, auf die jeder zuerst schaut. Sie darf nicht die
+        // einzige auf dem Beleg sein, die kleiner gesetzt ist.
+        $betragSpan = self::betragsSpalten($columnCount);
+        $labelSpan = max($columnCount - $betragSpan, 1);
         $html = $lastItemRow;
 
         foreach ($rows as $row) {
@@ -169,7 +200,7 @@ class LineItemsRenderer
 
             $html .= '<tr class="'.$this->escape($class).'">'
                 .'<td class="db-total-label" colspan="'.$labelSpan.'">'.$this->escape($row['label']).'</td>'
-                .'<td class="db-align-right">'.$this->escape($row['amount']).'</td>'
+                .'<td class="db-align-right" colspan="'.$betragSpan.'">'.$this->escape($row['amount']).'</td>'
                 .'</tr>';
         }
 
@@ -207,33 +238,73 @@ class LineItemsRenderer
      *
      * ## Zur Schaetzung
      *
-     * Die Spaltenbreite steht als Prozentwert, die Inhaltsbreite kennt der
-     * Renderer nicht. Gerechnet wird deshalb mit den 170 mm eines
-     * A4-Satzspiegels und rund 1,96 mm je Zeichen bei 10 pt — beides am
-     * Pruefstand gemessen, nicht gerechnet.
+     * Die Spaltenbreite steht als Prozentwert. Die Inhaltsbreite reicht der
+     * {@see DocumentBuilder} als `content_width`
+     * durch — er kennt den Seitenaufbau, dieser Renderer nicht. Ohne Angabe
+     * bleibt es bei den 170 mm, mit denen dieser Code begonnen hat.
+     *
+     * Von der Spalte geht die Polsterung ab: Die Zelle traegt links und rechts
+     * je 1 mm, der Text hat also 2 mm weniger als die Spalte breit ist.
+     *
+     * Rund 1,96 mm je Zeichen bei 10 pt — am Pruefstand gemessen und am
+     * 28.10.2026 an einem echten PDF gegengeprueft: `123.437,50 €` belegt
+     * 23,2 mm bei 12 Zeichen.
      *
      * Eine Fehlschaetzung ist folgenlos fuer die Richtigkeit: Sie setzt einen
      * Wert kleiner, der auch so gepasst haette, oder laesst einen stehen, der
      * knapp herausragt. Was sie nicht tut, ist Text verlieren.
      *
+     * ## Korrektur vom 28.10.2026 (Bug #1135)
+     *
+     * Hier kamen zwei Fehler zusammen, die zusammen dafuer sorgten, dass
+     * Zahlenspalten NIE verkleinert wurden:
+     *
+     * 1. Der Aufrufer reichte den **Rohwert** herein (`1250.0`), nicht den
+     *    gedruckten Text (`1.250,00`). `is_string()` liess ihn durchfallen,
+     *    und damit war jede Mengen-, Preis- und Summenspalte ungeprueft.
+     * 2. Gerechnet wurde mit 170 mm und ohne Polsterung. Bei den echten
+     *    165,9 mm eines DIN-5008-Satzspiegels hat eine 14-%-Spalte 23,2 mm,
+     *    nutzbar 21,2 — nicht 23,8. `123.437,50 €` passte in der Rechnung
+     *    und auf dem Papier nicht.
+     *
+     * Gemeldet als `98,75 €123.437,50 €` und `Gesamtbetrag13.610,27 €`.
+     *
      * @param  array{key: string, label: string, width: string, align?: string, format?: string}  $column
+     * @param  array<string, mixed>  $options
      */
-    private function laeuftUeber(mixed $wert, array $column): bool
+    private function laeuftUeber(mixed $wert, array $column, array $options = []): bool
     {
         if (! is_string($wert) || trim($wert) === '' || str_contains(trim($wert), ' ')) {
             return false;
         }
 
-        $breite = (float) rtrim($column['width'], '% ');
+        $platz = $this->nutzbareBreite($column, $options);
 
-        if ($breite <= 0.0) {
+        if ($platz <= 0.0) {
             return false;
         }
 
-        // 170 mm Satzspiegel, 1,96 mm je Zeichen bei 10 pt.
-        $platz = ($breite / 100) * 170.0;
+        return mb_strlen(trim($wert)) * self::MM_JE_ZEICHEN > $platz;
+    }
 
-        return mb_strlen(trim($wert)) * 1.96 > $platz;
+    /**
+     * Was in dieser Spalte an Text Platz hat, in Millimetern — Spaltenanteil
+     * des Satzspiegels, abzueglich der Polsterung der Zelle.
+     *
+     * @param  array{key: string, label: string, width: string, align?: string, format?: string}  $column
+     * @param  array<string, mixed>  $options
+     */
+    private function nutzbareBreite(array $column, array $options): float
+    {
+        $anteil = (float) rtrim($column['width'], '% ');
+
+        if ($anteil <= 0.0) {
+            return 0.0;
+        }
+
+        $satzspiegel = (float) ($options['content_width'] ?? self::SATZSPIEGEL_MM);
+
+        return ($anteil / 100) * $satzspiegel - self::ZELLPOLSTER_MM;
     }
 
     /**
@@ -356,8 +427,21 @@ class LineItemsRenderer
     }
 
     /**
-     * Eine Übertragszeile — dieselbe Spaltenbreite wie die Positionen, damit
-     * der Betrag unter der Gesamtspalte steht und nicht daneben.
+     * Wie viele Spalten der Betrag einer Summen- oder Uebertragszeile bekommt.
+     *
+     * Zwei, sobald die Tabelle genug Spalten hat — siehe die Begruendung in
+     * {@see self::closingGroup()}. Bei einer schmalen Tabelle (Pos. und
+     * Bezeichnung und sonst nichts) bleibt es bei einer, sonst stuende die
+     * Beschriftung nirgends mehr.
+     */
+    private static function betragsSpalten(int $columnCount): int
+    {
+        return $columnCount >= 3 ? 2 : 1;
+    }
+
+    /**
+     * Eine Übertragszeile — dieselbe Breite wie der Betrag im Summenblock,
+     * damit beide rechtsbuendig untereinander stehen.
      *
      * @param  list<array{key: string, label: string, width: string, align?: string, format?: string}>  $columns
      * @param  array<string, mixed>  $options
@@ -365,11 +449,15 @@ class LineItemsRenderer
     private function carryRow(string $label, float $amount, array $columns, array $options, string $class): string
     {
         $spalten = count($columns);
-        $breite = $columns[$spalten - 1]['width'] ?? '17%';
+        $betragSpan = self::betragsSpalten($spalten);
 
+        // Die Uebertragszeile ist fett gesetzt wie die Gesamtzeile und hatte
+        // damit dasselbe Problem (Bug #1135). Eine feste `width` steht hier
+        // nicht mehr: Bei zwei Spalten waere sie falsch, und die rechte Kante
+        // — auf die es ankommt — legt ohnehin die Tabelle fest.
         return '<tr class="db-carry '.$this->escape($class).'">'
-            .'<td class="db-align-right" colspan="'.max($spalten - 1, 1).'">'.$this->escape($label).'</td>'
-            .'<td class="db-align-right" style="width: '.$this->escape($breite).'">'
+            .'<td class="db-align-right" colspan="'.max($spalten - $betragSpan, 1).'">'.$this->escape($label).'</td>'
+            .'<td class="db-align-right" colspan="'.$betragSpan.'">'
             .$this->formatValue($amount, 'currency', $options)
             .'</td></tr>';
     }
@@ -385,6 +473,11 @@ class LineItemsRenderer
 
         foreach ($columns as $column) {
             $content = $this->formatValue($item->value($column['key']), $column['format'] ?? 'text', $options);
+
+            // Gemessen wird, was GEDRUCKT wird — nicht der Rohwert (Bug #1135).
+            // `1250.0` ist keine Zeichenkette und fiel in der Pruefung durch;
+            // auf dem Papier steht aber `1.250,00` und belegt 15,7 mm.
+            $gedruckt = $content;
 
             // The note rides along under the description rather than claiming a
             // column of its own — that is where a reader expects it.
@@ -409,7 +502,7 @@ class LineItemsRenderer
             // Zeile nach ihrem Inhalt — sichtbar versetzt.
             $klassen = 'db-align-'.$this->escape($column['align'] ?? 'left');
 
-            if ($this->laeuftUeber($item->value($column['key']), $column)) {
+            if ($this->laeuftUeber($gedruckt, $column, $options)) {
                 $klassen .= ' db-eng';
             }
 

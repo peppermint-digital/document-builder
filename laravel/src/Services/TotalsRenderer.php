@@ -67,8 +67,13 @@ class TotalsRenderer
         foreach ($this->rows($totals, $options) as $row) {
             $attribute = $row['class'] === '' ? '' : ' class="'.$this->escape($row['class']).'"';
 
+            // Die Beschriftung traegt eine eigene Klasse, damit das Preset ihr
+            // Abstand nach rechts geben kann. Ohne den standen Beschriftung
+            // und Betrag hier ohne jede Luft nebeneinander: Die Zellen dieses
+            // Blocks haben waagerecht keine Polsterung, und die Tabelle ist
+            // auf 70 mm festgelegt (Bug #1135).
             $html .= '<tr'.$attribute.'>'
-                .'<td>'.$this->escape($row['label']).'</td>'
+                .'<td class="db-total-label">'.$this->escape($row['label']).'</td>'
                 .'<td class="db-total-amount">'.$this->escape($row['amount']).'</td>'
                 .'</tr>';
         }

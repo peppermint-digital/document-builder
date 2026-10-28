@@ -49,6 +49,20 @@ class DocumentBuilder
     {
         $page ??= PageSetup::din5008();
 
+        // Der Satzspiegel in Millimetern — die einzige Stelle, an der er
+        // bekannt ist, und die Bezugsgroesse dafuer, ob ein Wert in seine
+        // Spalte passt ({@see LineItemsRenderer}). Bis zum 28.10.2026 rechnete
+        // der Renderer mit festen 170 mm; bei DIN 5008 sind es 165,9, und die
+        // 4 mm Unterschied entschieden darueber, ob `123.437,50 €` in seine
+        // Spalte gesetzt oder in die Nachbarspalte geschoben wurde (Bug #1135).
+        //
+        // `??=`: Wer die Breite selbst kennt — etwa ein Renderer-Treiber mit
+        // anderem Satzspiegel — behaelt sie.
+        $options['content_width'] ??= round(
+            $page->paperWidth() - $page->marginLeft - $page->marginRight,
+            2
+        );
+
         // The two block tokens are parked behind sentinels first. They expand
         // to markup rather than to a value, so they must survive placeholder
         // substitution — and they must be filled in *afterwards*, otherwise a
