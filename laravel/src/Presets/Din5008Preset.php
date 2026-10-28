@@ -388,9 +388,14 @@ class Din5008Preset implements DocumentPreset
         table.db-totals td { padding: 1mm 0; }
         /* Abstand zwischen Beschriftung und Betrag. Die Zellen haben
            waagerecht keine Polsterung, und der Block ist auf 70 mm
-           festgelegt — ohne diese Zeile stossen „Gesamtbetrag" und der
-           Betrag aneinander, sobald die Summe fuenfstellig wird
-           (Bug #1135). */
+           festgelegt — ohne diese Zeile stossen die beiden aneinander,
+           sobald die Summe fuenfstellig wird (Bug #1135).
+
+           Keine Beschriftung im Klartext in diesem Kommentar: Das CSS
+           steht im ausgelieferten HTML, und ein Beleg ohne Betraege wird
+           daran geprueft, dass die Woerter des Summenblocks NICHT
+           vorkommen. Ein Kommentar, der sie nennt, laesst diese Pruefung
+           fehlschlagen — einmal passiert, 28.10.2026. */
         table.db-totals .db-total-label { padding-right: 4mm; }
         table.db-totals .db-total-amount { text-align: right; }
         table.db-totals .db-total-gross td {

@@ -194,3 +194,46 @@ describe('auf dem Papier', function () {
             ->and($beginnt - $endet)->toBeGreaterThan(3.0);
     });
 });
+
+/**
+ * Das Preset-CSS steht im ausgelieferten HTML — und wird mitgelesen.
+ *
+ * Ein Lieferschein ohne Betraege wird in der Verwaltung daran geprueft, dass
+ * die Woerter des Summenblocks im HTML NICHT vorkommen. Ein Kommentar im CSS,
+ * der eine dieser Beschriftungen im Klartext nennt, laesst diese Pruefung
+ * fehlschlagen — am 28.10.2026 genau einmal passiert, mit einem Kommentar aus
+ * diesem Commit.
+ *
+ * Die Zusage gilt fuer jedes Produkt, das Belege ohne Preise kennt: Was im
+ * Preset steht, steht beim Empfaenger im Quelltext.
+ */
+it('nennt keine Beschriftung des Summenblocks im ausgelieferten CSS', function () {
+    $daten = DocumentData::fromArray([
+        'type' => 'delivery_note',
+        'subject' => 'Lieferschein',
+        'sender' => ['name' => 'Peppermint Digital GmbH', 'lines' => ['Adam-Stegerwald-Str. 15']],
+        'recipient' => ['name' => 'Mustermann GmbH', 'lines' => ['Beispielweg 42']],
+        'line_items' => [[
+            'position' => '1', 'description' => 'Textildruck DIN A4', 'quantity' => 400, 'unit' => 'Stk',
+        ]],
+        // Kein `totals` — dieser Beleg fuehrt keine Betraege.
+    ]);
+
+    $builder = new DocumentBuilder(
+        new Din5008Preset, new DomPdfRenderer, new PlaceholderRenderer, new LineItemsRenderer, new TotalsRenderer,
+    );
+
+    $html = $builder->html($daten, '{{ line_items }}', PageSetup::din5008(), [
+        'columns' => [
+            ['key' => 'position', 'label' => 'Pos.', 'width' => '10%', 'align' => 'right'],
+            ['key' => 'description', 'label' => 'Bezeichnung', 'width' => '70%'],
+            ['key' => 'quantity', 'label' => 'Menge', 'width' => '10%', 'align' => 'right', 'format' => 'decimal'],
+            ['key' => 'unit', 'label' => 'Einheit', 'width' => '10%'],
+        ],
+    ]);
+
+    expect($html)->not->toContain('Gesamtbetrag')
+        ->and($html)->not->toContain('Zwischensumme')
+        ->and($html)->not->toContain('Nettobetrag')
+        ->and($html)->not->toContain('USt.');
+});
